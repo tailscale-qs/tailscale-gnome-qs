@@ -82,8 +82,9 @@ const TailscaleDeviceItem = GObject.registerClass(
 
       this.connect('activate', () => onClick());
 
-      const clickAction = this._clickAction ?? (() => {
-        const action = new Clutter.ClickAction();
+      
+      const clickGesture = this._clickGesture ?? (() => {
+        const action = new Clutter.ClickGesture();
         this.add_action(action);
         action.connect('notify::pressed', () => {
           if (action.pressed)
@@ -91,16 +92,24 @@ const TailscaleDeviceItem = GObject.registerClass(
           else
             this.remove_style_pseudo_class('active');
         });
-        action.connect('clicked', () => this.activate(Clutter.get_current_event()));
+        action.connect('recognize', () => this.activate(Clutter.get_current_event()));
         return action
       })();
-      clickAction.connect('long-press', (_action, _actor, state) => {
-        if (state === Clutter.LongPressState.ACTIVATE) {
-          return onLongClick();
-        }
-        return true;
-      });
-      clickAction.enabled = true;
+      clickGesture.enabled = true;
+
+      const longPressGesture = this._longPressGesture ?? (() => {
+        const action = new Clutter.LongPressGesture();
+        this.add_action(action);
+        action.connect('notify::pressed', () => {
+          if (action.pressed)
+            this.add_style_pseudo_class('active');
+          else
+            this.remove_style_pseudo_class('active');
+        });
+        action.connect('recognize', () => onLongClick());
+        return action
+      })();
+      longPressGesture.enabled = true;
     }
 
     activate(event) {
@@ -207,7 +216,7 @@ const TailscaleMenuToggle = GObject.registerClass(
 
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, node.ips[0]);
             St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, node.ips[0]);
-            Main.osdWindowManager.show(-1, icon, _("IP address has been copied to the clipboard"));
+            Main.osdWindowManager.showAll(icon, _("IP address has been copied to the clipboard"));
             return true;
           };
 
