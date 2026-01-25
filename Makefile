@@ -1,5 +1,6 @@
-BUNDLE_PATH = "tailscale@joaophi.github.com.zip"
-EXTENSION_DIR = "tailscale@joaophi.github.com"
+UUID = tailscale-gnome-qs@tailscale-qs.github.io
+BUNDLE_PATH = "$(UUID).zip"
+EXTENSION_DIR = "$(UUID)"
 
 all: build install
 
@@ -11,6 +12,7 @@ build:
 	gnome-extensions pack --force --podir=locale \
 	                      --extra-source=icons/ \
 	                      --extra-source=tailscale.js \
+	                      --extra-source=mullvad.js \
 	                      --extra-source=timeout.js \
 	                      --extra-source=compat.js; \
 	mv $(EXTENSION_DIR).shell-extension.zip ../$(BUNDLE_PATH)
@@ -19,7 +21,7 @@ install:
 	gnome-extensions install $(BUNDLE_PATH) --force
 
 enable:
-	dbus-run-session -- gnome-extensions enable tailscale@joaophi.github.com
+	dbus-run-session -- gnome-extensions enable $(UUID)
 
 run:
 	dbus-run-session -- gnome-shell --nested --wayland
