@@ -21,6 +21,7 @@ import Clutter from "gi://Clutter";
 import GObject from "gi://GObject";
 import Gio from "gi://Gio";
 import St from "gi://St";
+import GLib from "gi://GLib";
 
 import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 
@@ -32,7 +33,6 @@ import * as QuickSettings from "resource:///org/gnome/shell/ui/quickSettings.js"
 const QuickSettingsMenu = Main.panel.statusArea.quickSettings;
 
 import { Tailscale } from "./tailscale.js";
-import { clearInterval, clearSources, setInterval } from "./timeout.js";
 import { filterMullvadNodes, createMullvadExitNodeButton } from "./mullvad.js";
 
 export const DisableExitNodeButton = GObject.registerClass(
@@ -325,25 +325,28 @@ const TailscaleMenuToggle = GObject.registerClass(
       prefs.menu.addMenuItem(ssh);
 
       this.menu.addMenuItem(prefs);
-
+      
       // PROFILES
       const profiles = new PopupMenu.PopupSubMenuMenuItem(_("Profiles"), false, {});
       const update_profiles = (obj) => {
         profiles.menu.removeAll();
         for (const p of obj.profiles) {
+          if (!p.NetworkProfile || !p.NetworkProfile.DomainName) continue; // Skip invalid profiles
           let enabled = obj._prefs.ControlURL === p.ControlURL && obj._prefs.Config.UserProfile.ID === p.UserProfile.ID;
           const onClick = () => { tailscale.profiles = p.ID; }
           profiles.menu.addMenuItem(new TailscaleProfileItem(p.Name, p.NetworkProfile.DomainName, enabled, onClick));
         }
       }
       tailscale.connect("notify::profiles", (obj) => update_profiles(obj));
-      update_nodes(tailscale);
+      update_profiles(tailscale);
       this.menu.addMenuItem(profiles);
     }
   }
 );
 
 export default class TailscaleExtension extends Extension {
+  _timeouts = [];
+
   enable() {
     const icon = Gio.icon_new_for_string(`${this.path}/icons/tailscale-symbolic.svg`);
 
@@ -354,9 +357,9 @@ export default class TailscaleExtension extends Extension {
       this._indicator.quickSettingsItems.push(this._menu);
       QuickSettingsMenu.addExternalIndicator(this._indicator);
     } else {
-      const timerHandle = setInterval(() => {
+      const timerHandle = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
         if (!QuickSettingsMenu._indicators.get_first_child())
-          return;
+          return GLib.SOURCE_CONTINUE;
 
         QuickSettingsMenu._indicators.insert_child_at_index(this._indicator, 0);
         QuickSettingsMenu._addItems([this._menu]);
@@ -365,13 +368,18 @@ export default class TailscaleExtension extends Extension {
           QuickSettingsMenu._backgroundApps.quickSettingsItems[0]
         );
 
-        clearInterval(timerHandle);
-      }, 100);
+        // Remove from tracking and stop
+        const index = this._timeouts.indexOf(timerHandle);
+        if (index > -1) this._timeouts.splice(index, 1);
+        return GLib.SOURCE_REMOVE;
+      });
+      this._timeouts.push(timerHandle);
     }
   }
 
   disable() {
-    clearSources();
+    this._timeouts.forEach(id => GLib.Source.remove(id));
+    this._timeouts = [];
 
     this._menu.destroy();
     this._menu = null;
@@ -382,9 +390,4 @@ export default class TailscaleExtension extends Extension {
     this._tailscale.destroy();
     this._tailscale = null;
   }
-}
-
-function init(meta) {
-  ExtensionUtils.initTranslations(Me.metadata.uuid);
-  return new TailscaleExtension(meta.uuid, Me.path);
 }
