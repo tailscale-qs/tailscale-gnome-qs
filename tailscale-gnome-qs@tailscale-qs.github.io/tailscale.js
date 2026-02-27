@@ -123,12 +123,15 @@ export const Tailscale = GObject.registerClass(
       this._nodes = [];
       this._profiles = [];
       this._cancelable = new Gio.Cancellable();
+      this._timeouts = [];
       this._listen();
     }
 
     destroy() {
       this._cancelable.cancel();
       this._client.session.abort();
+      this._timeouts.forEach(id => GLib.Source.remove(id));
+      this._timeouts = [];
     }
 
     _process_running(prefs) {
@@ -313,10 +316,15 @@ export const Tailscale = GObject.registerClass(
     }
 
     async _listen() {
-      const delay = (delay) => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
-        resolve();
-        return GLib.SOURCE_REMOVE;
-      }));
+      const delay = (delay) => new Promise(resolve => {
+        const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+          const index = this._timeouts.indexOf(id);
+          if (index > -1) this._timeouts.splice(index, 1);
+          resolve();
+          return GLib.SOURCE_REMOVE;
+        });
+        this._timeouts.push(id);
+      });
 
       while (true) {
         try {
