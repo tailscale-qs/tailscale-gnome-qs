@@ -135,15 +135,29 @@ const TailscaleDeviceItem = GObject.registerClass(
           return action;
         })();
         longPressGesture.enabled = true;
-      } else {
+} else {
         // GNOME 46 fallback - use traditional click handling
-        this.connect('button-press-event', () => {
-          onClick?.();
-          return Clutter.EVENT_STOP;
+        let pressTimeout = null;
+
+        this.connect('button-press-event', (actor, event) => {
+          if (event.get_button() === 1) {
+            pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+              pressTimeout = null;
+              onLongClick?.();
+              return GLib.SOURCE_REMOVE;
+            });
+          }
+          return Clutter.EVENT_PROPAGATE;
         });
+
         this.connect('button-release-event', (actor, event) => {
-          if (event.get_button() === 3) {
-            onLongClick?.();
+          if (event.get_button() === 1) {
+            if (pressTimeout) {
+              // Released before long press fired - treat as normal click
+              GLib.Source.remove(pressTimeout);
+              pressTimeout = null;
+              onClick?.();
+            }
             return Clutter.EVENT_STOP;
           }
           return Clutter.EVENT_PROPAGATE;
