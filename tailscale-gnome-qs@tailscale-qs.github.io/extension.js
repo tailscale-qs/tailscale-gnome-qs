@@ -22,6 +22,7 @@ import GObject from "gi://GObject";
 import Gio from "gi://Gio";
 import St from "gi://St";
 import GLib from "gi://GLib";
+import * as Config from "resource:///org/gnome/shell/misc/config.js";
 
 import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 
@@ -102,36 +103,66 @@ const TailscaleDeviceItem = GObject.registerClass(
       this.add_child(sub);
       sub.text = subtitle;
 
-      this.connect('activate', () => onClick());
-
+      this.connect('activate', () => onClick?.());
       
-      const clickGesture = this._clickGesture ?? (() => {
-        const action = new Clutter.ClickGesture();
-        this.add_action(action);
-        action.connect('notify::pressed', () => {
-          if (action.pressed)
-            this.add_style_pseudo_class('active');
-          else
-            this.remove_style_pseudo_class('active');
-        });
-        action.connect('recognize', () => this.activate(Clutter.get_current_event()));
-        return action
-      })();
-      clickGesture.enabled = true;
+      const shellVersion = parseInt(Config.PACKAGE_VERSION.split('.')[0]);
 
-      const longPressGesture = this._longPressGesture ?? (() => {
-        const action = new Clutter.LongPressGesture();
-        this.add_action(action);
-        action.connect('notify::pressed', () => {
-          if (action.pressed)
-            this.add_style_pseudo_class('active');
-          else
-            this.remove_style_pseudo_class('active');
+      if (shellVersion >= 47) {
+        const clickGesture = this._clickGesture ?? (() => {
+          const action = new Clutter.ClickGesture();
+          this.add_action(action);
+          action.connect('notify::pressed', () => {
+            if (action.pressed)
+              this.add_style_pseudo_class('active');
+            else
+              this.remove_style_pseudo_class('active');
+          });
+          action.connect('recognize', () => this.activate(Clutter.get_current_event()));
+          return action;
+        })();
+        clickGesture.enabled = true;
+
+        const longPressGesture = this._longPressGesture ?? (() => {
+          const action = new Clutter.LongPressGesture();
+          this.add_action(action);
+          action.connect('notify::pressed', () => {
+            if (action.pressed)
+              this.add_style_pseudo_class('active');
+            else
+              this.remove_style_pseudo_class('active');
+          });
+          action.connect('recognize', () => onLongClick());
+          return action;
+        })();
+        longPressGesture.enabled = true;
+} else {
+        // GNOME 46 fallback - use traditional click handling
+        let pressTimeout = null;
+
+        this.connect('button-press-event', (actor, event) => {
+          if (event.get_button() === 1) {
+            pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+              pressTimeout = null;
+              onLongClick?.();
+              return GLib.SOURCE_REMOVE;
+            });
+          }
+          return Clutter.EVENT_PROPAGATE;
         });
-        action.connect('recognize', () => onLongClick());
-        return action
-      })();
-      longPressGesture.enabled = true;
+
+        this.connect('button-release-event', (actor, event) => {
+          if (event.get_button() === 1) {
+            if (pressTimeout) {
+              // Released before long press fired - treat as normal click
+              GLib.Source.remove(pressTimeout);
+              pressTimeout = null;
+              onClick?.();
+            }
+            return Clutter.EVENT_STOP;
+          }
+          return Clutter.EVENT_PROPAGATE;
+        });
+      }
     }
 
     activate(event) {
@@ -139,9 +170,15 @@ const TailscaleDeviceItem = GObject.registerClass(
         this.emit('activate', event);
     }
 
-    vfunc_button_press_event() { }
+    vfunc_button_press_event() {
+      if (parseInt(Config.PACKAGE_VERSION.split('.')[0]) >= 47)
+        return;
+    }
 
-    vfunc_button_release_event() { }
+    vfunc_button_release_event() {
+      if (parseInt(Config.PACKAGE_VERSION.split('.')[0]) >= 47)
+        return;
+    }
 
     vfunc_touch_event(touchEvent) { }
   }
