@@ -7,9 +7,10 @@
     "46",
     "47",
     "48",
-    "49"
+    "49",
+    "50"
   ],
   "url": "https://github.com/tailscale-qs/tailscale-gnome-qs",
   "gettext-domain": "tailscale-gnome-qs@tailscale-qs.github.io",
-  "version": 4
+  "version": 5
 }
