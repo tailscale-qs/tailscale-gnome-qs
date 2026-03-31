@@ -1,0 +1,33 @@
+{
+  "name": "tailscale-gnome-qs",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "[![Get it on GNOME Extensions](https://raw.githubusercontent.com/andyholmes/gnome-shell-extensions-badge/master/get-it-on-ego.svg?sanitize=true)](https://extensions.gnome.org/extension/9193/tailscale-qs/)",
+  "main": "eslint.config.js",
+  "scripts": {
+    "lint": "eslint tailscale-gnome-qs@tailscale-qs.github.io/",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tailscale-qs/tailscale-gnome-qs.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tailscale-qs/tailscale-gnome-qs/issues"
+  },
+  "homepage": "https://github.com/tailscale-qs/tailscale-gnome-qs#readme",
+  "devDependencies": {
+    "@eslint/config-helpers": "^0.5.3",
+    "@eslint/js": "9.39.4",
+    "@girs/gjs": "4.0.0-beta.44",
+    "@girs/gnome-shell": "^49.1.0",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^9.39.4",
+    "eslint-config-gnome": "git+https://gitlab.gnome.org/World/javascript/eslint-config-gnome.git#c479d059e8d9ea99c3b53c2ea43abf7fdb05eb51",
+    "eslint-formatter-junit": "^9.0.1",
+    "eslint-plugin-jsdoc": "^48.11.0"
+  }
+}
