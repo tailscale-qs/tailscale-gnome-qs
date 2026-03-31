@@ -1,0 +1,21 @@
+{
+   "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "sourceMap": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "target": "ES2023",
+    "lib": [
+      "ES2023"
+    ]
+  },
+  "files": [
+    "tailscale-gnome-qs@tailscale-qs.github.io/extension.js",
+    "tailscale-gnome-qs@tailscale-qs.github.io/tailscale.js",
+    "tailscale-gnome-qs@tailscale-qs.github.io/mullvad.js"
+  ],
+  "include": [
+    "ambient.d.ts"
+  ]
+}
