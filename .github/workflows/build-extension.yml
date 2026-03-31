@@ -23,5 +23,5 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: tailscale@joaophi.github.com.zip
-        path: tailscale@joaophi.github.com.zip
+        name: tailscale-gnome-qs@tailscale-qs.github.zip
+        path: tailscale-gnome-qs@tailscale-qs.github.zip

@@ -1,2 +1,3 @@
 *.zip
 *.mo
+node_modules/
