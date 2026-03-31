@@ -17,414 +17,441 @@
  */
 
 /* exported init */
-import Clutter from "gi://Clutter";
-import GObject from "gi://GObject";
-import Gio from "gi://Gio";
-import St from "gi://St";
-import GLib from "gi://GLib";
-import * as Config from "resource:///org/gnome/shell/misc/config.js";
+import Clutter from 'gi://Clutter';
+import GObject from 'gi://GObject';
+import Gio from 'gi://Gio';
+import St from 'gi://St';
+import GLib from 'gi://GLib';
+import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 
-import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
+import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
-import * as QuickSettings from "resource:///org/gnome/shell/ui/quickSettings.js";
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as QuickSettings from 'resource:///org/gnome/shell/ui/quickSettings.js';
 
 // This is the live instance of the Quick Settings menu
 const QuickSettingsMenu = Main.panel.statusArea.quickSettings;
 
-import { Tailscale } from "./tailscale.js";
-import { filterMullvadNodes, createMullvadExitNodeButton } from "./mullvad.js";
+import {Tailscale} from './tailscale.js';
+import {filterMullvadNodes, createMullvadExitNodeButton} from './mullvad.js';
 
 export const DisableExitNodeButton = GObject.registerClass(
-    class DisableExitNodeButton extends St.Button {
-        _init(tailscale) {
-            const isExitNodeActive = tailscale.exit_node !== "";
+  class DisableExitNodeButton extends St.Button {
+      _init(tailscale) {
+          const isExitNodeActive = tailscale.exit_node !== '';
 
-            super._init({
-                style_class: "icon-button",
-                can_focus: true,
-                icon_name: "network-vpn-symbolic",
-                accessible_name: _("disable exit node"),
-                reactive: isExitNodeActive,
-            });
+          super._init({
+              style_class: 'icon-button',
+              can_focus: true,
+              icon_name: 'network-vpn-symbolic',
+              accessible_name: _('disable exit node'),
+              reactive: isExitNodeActive,
+          });
 
-            this.connect("clicked", () => {
-                tailscale.exit_node = "";
-                this.reactive = false;
-            });
-        }
-    }
+          this.connect('clicked', () => {
+              tailscale.exit_node = '';
+              this.reactive = false;
+          });
+      }
+  }
 );
 
 const TailscaleIndicator = GObject.registerClass(
   class TailscaleIndicator extends QuickSettings.SystemIndicator {
-    _init(icon, tailscale) {
-      super._init();
+      _init(icon, tailscale) {
+          super._init();
 
-      // Create the icon for the indicator
-      const up = this._addIndicator();
-      up.gicon = icon;
-      tailscale.bind_property("running", up, "visible", GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.DEFAULT);
+          // Create the icon for the indicator
+          const up = this._addIndicator();
+          up.gicon = icon;
+          tailscale.bind_property('running', up, 'visible', GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.DEFAULT);
 
-      // Create the icon for the indicator
-      const exit = this._addIndicator();
-      exit.icon_name = "network-vpn-symbolic";
-      const setVisible = () => { exit.visible = tailscale.running && tailscale.exit_node != ""; }
-      tailscale.connect("notify::exit-node", () => setVisible());
-      tailscale.connect("notify::running", () => setVisible());
-      setVisible();
-    }
+          // Create the icon for the indicator
+          const exit = this._addIndicator();
+          exit.icon_name = 'network-vpn-symbolic';
+          const setVisible = () => {
+              exit.visible = tailscale.running && tailscale.exit_node !== '';
+          };
+          tailscale.connect('notify::exit-node', () => setVisible());
+          tailscale.connect('notify::running', () => setVisible());
+          setVisible();
+      }
   }
 );
 
 const TailscaleDeviceItem = GObject.registerClass(
   class TailscaleDeviceItem extends PopupMenu.PopupBaseMenuItem {
-    _init(icon_name, text, subtitle, onClick, onLongClick) {
-      super._init({
-        activate: onClick,
-      });
-
-      const icon = new St.Icon({
-        style_class: 'popup-menu-icon',
-      });
-      this.add_child(icon);
-      icon.icon_name = icon_name;
-
-      const label = new St.Label({
-        x_expand: true,
-      });
-      this.add_child(label);
-      label.text = text;
-
-      const sub = new St.Label({
-        style_class: 'device-subtitle',
-      });
-      this.add_child(sub);
-      sub.text = subtitle;
-
-      this.connect('activate', () => onClick?.());
-      
-      const shellVersion = parseInt(Config.PACKAGE_VERSION.split('.')[0]);
-
-      if (shellVersion >= 47) {
-        const clickGesture = this._clickGesture ?? (() => {
-          const action = new Clutter.ClickGesture();
-          this.add_action(action);
-          action.connect('notify::pressed', () => {
-            if (action.pressed)
-              this.add_style_pseudo_class('active');
-            else
-              this.remove_style_pseudo_class('active');
+      _init(iconName, text, subtitle, onClick, onLongClick) {
+          super._init({
+              activate: onClick,
           });
-          action.connect('recognize', () => this.activate(Clutter.get_current_event()));
-          return action;
-        })();
-        clickGesture.enabled = true;
 
-        const longPressGesture = this._longPressGesture ?? (() => {
-          const action = new Clutter.LongPressGesture();
-          this.add_action(action);
-          action.connect('notify::pressed', () => {
-            if (action.pressed)
-              this.add_style_pseudo_class('active');
-            else
-              this.remove_style_pseudo_class('active');
+          const icon = new St.Icon({
+              style_class: 'popup-menu-icon',
           });
-          action.connect('recognize', () => onLongClick());
-          return action;
-        })();
-        longPressGesture.enabled = true;
-} else {
-        // GNOME 46 fallback - use traditional click handling
-        let pressTimeout = null;
+          this.add_child(icon);
+          icon.icon_name = iconName;
 
-        this.connect('button-press-event', (actor, event) => {
-          if (event.get_button() === 1) {
-            pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-              pressTimeout = null;
-              onLongClick?.();
-              return GLib.SOURCE_REMOVE;
-            });
-          }
-          return Clutter.EVENT_PROPAGATE;
-        });
+          const label = new St.Label({
+              x_expand: true,
+          });
+          this.add_child(label);
+          label.text = text;
 
-        this.connect('button-release-event', (actor, event) => {
-          if (event.get_button() === 1) {
-            if (pressTimeout) {
-              // Released before long press fired - treat as normal click
-              GLib.Source.remove(pressTimeout);
-              pressTimeout = null;
-              onClick?.();
-            }
-            return Clutter.EVENT_STOP;
+          const sub = new St.Label({
+              style_class: 'device-subtitle',
+          });
+          this.add_child(sub);
+          sub.text = subtitle;
+
+          this.connect('activate', () => onClick?.());
+
+          const shellVersion = parseInt(Config.PACKAGE_VERSION.split('.')[0]);
+
+          if (shellVersion >= 47) {
+              const clickGesture = this._clickGesture ?? (() => {
+                  const action = new Clutter.ClickGesture();
+                  this.add_action(action);
+                  action.connect('notify::pressed', () => {
+                      if (action.pressed)
+                          this.add_style_pseudo_class('active');
+                      else
+                          this.remove_style_pseudo_class('active');
+                  });
+                  action.connect('recognize', () => this.activate(Clutter.get_current_event()));
+                  return action;
+              })();
+              clickGesture.enabled = true;
+
+              const longPressGesture = this._longPressGesture ?? (() => {
+                  const action = new Clutter.LongPressGesture();
+                  this.add_action(action);
+                  action.connect('notify::pressed', () => {
+                      if (action.pressed)
+                          this.add_style_pseudo_class('active');
+                      else
+                          this.remove_style_pseudo_class('active');
+                  });
+                  action.connect('recognize', () => onLongClick());
+                  return action;
+              })();
+              longPressGesture.enabled = true;
+          } else {
+              // GNOME 46 fallback - use traditional click handling
+              let pressTimeout = null;
+
+              this.connect('button-press-event', (_actor, event) => {
+                  if (event.get_button() === 1) {
+                      pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+                          pressTimeout = null;
+                          onLongClick?.();
+                          return GLib.SOURCE_REMOVE;
+                      });
+                  }
+                  return Clutter.EVENT_PROPAGATE;
+              });
+
+              this.connect('button-release-event', (_actor, event) => {
+                  if (event.get_button() === 1) {
+                      if (pressTimeout) {
+                          // Released before long press fired - treat as normal click
+                          GLib.Source.remove(pressTimeout);
+                          pressTimeout = null;
+                          onClick?.();
+                      }
+                      return Clutter.EVENT_STOP;
+                  }
+                  return Clutter.EVENT_PROPAGATE;
+              });
           }
-          return Clutter.EVENT_PROPAGATE;
-        });
       }
-    }
 
-    activate(event) {
-      if (this._activatable)
-        this.emit('activate', event);
-    }
+      activate(event) {
+          if (this._activatable)
+              this.emit('activate', event);
+      }
 
-    vfunc_button_press_event() {
-      if (parseInt(Config.PACKAGE_VERSION.split('.')[0]) >= 47)
-        return;
-    }
+      vfunc_button_press_event() { }
 
-    vfunc_button_release_event() {
-      if (parseInt(Config.PACKAGE_VERSION.split('.')[0]) >= 47)
-        return;
-    }
+      vfunc_button_release_event() { }
 
-    vfunc_touch_event(touchEvent) { }
+      vfunc_touch_event(_touchEvent) { }
   }
 );
 
 const TailscaleProfileItem = GObject.registerClass(
   class TailscaleProfileItem extends PopupMenu.PopupBaseMenuItem {
-    _init(title, subtitle, enabled, onClick) {
-      super._init({
-        activate: onClick,
-      });
+      _init(title, subtitle, enabled, onClick) {
+          super._init({
+              activate: onClick,
+          });
 
-      const label = new St.Label({
-        x_expand: true,
-      });
-      this.add_child(label);
-      label.text = title;
+          const label = new St.Label({
+              x_expand: true,
+          });
+          this.add_child(label);
+          label.text = title;
 
-      const sub = new St.Label({
-        style_class: 'device-subtitle',
-      });
-      this.add_child(sub);
-      sub.text = subtitle;
+          const sub = new St.Label({
+              style_class: 'device-subtitle',
+          });
+          this.add_child(sub);
+          sub.text = subtitle;
 
-      if (enabled) {
-        const icon = new St.Icon({ style_class: 'system-status-icon' });
-        this.add_child(icon);
-        icon.icon_name = 'object-select-symbolic'
+          if (enabled) {
+              const icon = new St.Icon({style_class: 'system-status-icon'});
+              this.add_child(icon);
+              icon.icon_name = 'object-select-symbolic';
+          }
+
+          this.connect('activate', () => onClick());
       }
 
-      this.connect('activate', () => onClick());
-    }
-
-    activate(event) {
-      if (this._activatable)
-        this.emit('activate', event);
-    }
+      activate(event) {
+          if (this._activatable)
+              this.emit('activate', event);
+      }
   }
 );
 
 const PopupScrollableSubMenuMenuItem = GObject.registerClass(
   class PopupScrollableSubMenuMenuItem extends PopupMenu.PopupSubMenuMenuItem {
-    _init(props) {
-      super._init(props);
+      _init(props) {
+          super._init(props);
 
-      this.menu._needsScrollbar = () => true;
-      this.menu.box.height = 200;
-    }
+          this.menu._needsScrollbar = () => true;
+          this.menu.box.height = 200;
+      }
   }
 );
 
 const TailscaleMenuToggle = GObject.registerClass(
   class TailscaleMenuToggle extends QuickSettings.QuickMenuToggle {
-    _init(icon, tailscale) {
-      super._init({
-        label: "Tailscale",
-        gicon: icon,
-        toggleMode: true,
-        menuEnabled: true,
-      });
+      _getIconName(node) {
+          if (!node.online)
+              return 'network-offline-symbolic';
 
-      this.title = "Tailscale";
-      tailscale.bind_property("running", this, "checked", GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.BIDIRECTIONAL);
+          if (node.os === 'android' || node.os === 'iOS')
+              return 'phone-symbolic';
 
-      // Header action bar section
-      const actionLayout = new Clutter.GridLayout();
-      const actionBar = new St.Widget({
-          layout_manager: actionLayout,
-      });
+          if (node.mullvad)
+              return 'network-vpn-symbolic';
 
-      this.menu._headerSpacer.x_align = Clutter.ActorAlign.END;
-      this.menu._headerSpacer.add_child(actionBar);
+          return 'computer-symbolic';
+      }
 
-      const disableExitNodeButton = new DisableExitNodeButton(tailscale);
-      actionLayout.attach(disableExitNodeButton, 0, 0, 1, 1);
+      _getNodeSubtitle(node) {
+          if (node.exit_node)
+              return _('disable exit node');
+          if (node.exit_node_option)
+              return _('use as exit node');
 
-      // This function is unique to this class. It adds a nice header with an
-      // icon, title and optional subtitle. It's recommended you do so for
-      // consistency with other menus.
-      tailscale.connect("notify::exit-node-name", () => {
-        this.subtitle = tailscale.exit_node_name;
-        this.menu.setHeader(icon, this.title, this.subtitle);
-        disableExitNodeButton.reactive = tailscale.exit_node !== "";
-      });
-      this.menu.setHeader(icon, this.title, tailscale.exit_node_name);
+          return '';
+      }
 
-      // NODES
-      const mnodes = new PopupScrollableSubMenuMenuItem(_("Nodes"), false, {});
-      const nodes = new PopupMenu.PopupMenuSection();
+      _init(icon, tailscale) {
+          super._init({
+              label: 'Tailscale',
+              gicon: icon,
+              toggleMode: true,
+              menuEnabled: true,
+          });
 
-      // Keep track of available Mullvad nodes
-      let availableMullvadNodes = [];
-      let mullvadButtonItem = null;
+          this.title = 'Tailscale';
+          tailscale.bind_property('running', this, 'checked', GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.BIDIRECTIONAL);
 
-      const update_nodes = (obj) => {
-        nodes.removeAll();
+          // Header action bar section
+          const actionLayout = new Clutter.GridLayout();
+          const actionBar = new St.Widget({
+              layout_manager: actionLayout,
+          });
 
-        // Separate Mullvad nodes from regular nodes and filter only online Mullvad nodes
-        availableMullvadNodes = filterMullvadNodes(obj.nodes);
-        const regularNodes = obj.nodes.filter(node => !node.mullvad || node.exit_node);
+          this.menu._headerSpacer.x_align = Clutter.ActorAlign.END;
+          this.menu._headerSpacer.add_child(actionBar);
 
-        // Add regular nodes to main menu
-        for (const node of regularNodes) {
-          const device_icon = !node.online
-            ? "network-offline-symbolic"
-            : ((node.os == "android" || node.os == "iOS")
-              ? "phone-symbolic"
-              : (node.mullvad
-                ? "network-vpn-symbolic"
-                : "computer-symbolic"));
-          const subtitle = node.exit_node ? _("disable exit node") : (node.exit_node_option ? _("use as exit node") : "");
-          const onClick = node.exit_node_option ? () => { tailscale.exit_node = node.exit_node ? "" : node.id; } : null;
-          const onLongClick = () => {
-            if (!node.ips)
-              return false;
+          const disableExitNodeButton = new DisableExitNodeButton(tailscale);
+          actionLayout.attach(disableExitNodeButton, 0, 0, 1, 1);
 
-            St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, node.ips[0]);
-            St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, node.ips[0]);
-            Main.osdWindowManager.showAll(icon, _("IP address has been copied to the clipboard"));
-            return true;
+          // This function is unique to this class. It adds a nice header with an
+          // icon, title and optional subtitle. It's recommended you do so for
+          // consistency with other menus.
+          tailscale.connect('notify::exit-node-name', () => {
+              this.subtitle = tailscale.exit_node_name;
+              this.menu.setHeader(icon, this.title, this.subtitle);
+              disableExitNodeButton.reactive = tailscale.exit_node !== '';
+          });
+          this.menu.setHeader(icon, this.title, tailscale.exit_node_name);
+
+          // NODES
+          const mnodes = new PopupScrollableSubMenuMenuItem(_('Nodes'), false, {});
+          const nodes = new PopupMenu.PopupMenuSection();
+
+          // Keep track of available Mullvad nodes
+          let availableMullvadNodes = [];
+          let mullvadButtonItem = null;
+
+          const updateNodes = obj => {
+              nodes.removeAll();
+
+              // Separate Mullvad nodes from regular nodes and filter only online Mullvad nodes
+              availableMullvadNodes = filterMullvadNodes(obj.nodes);
+              const regularNodes = obj.nodes.filter(node => !node.mullvad || node.exit_node);
+
+              // Add regular nodes to main menu
+              for (const node of regularNodes) {
+                  const deviceIcon = this._getIconName(node);
+                  const subtitle = this._getNodeSubtitle(node);
+                  const onClick = node.exit_node_option ? () => {
+                      tailscale.exit_node = node.exit_node ? '' : node.id;
+                  } : null;
+                  const onLongClick = () => {
+                      if (!node.ips)
+                          return false;
+
+                      St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, node.ips[0]);
+                      St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, node.ips[0]);
+                      Main.osdWindowManager.showAll(icon, _('IP address has been copied to the clipboard'));
+                      return true;
+                  };
+
+                  nodes.addMenuItem(new TailscaleDeviceItem(deviceIcon, node.name, subtitle, onClick, onLongClick));
+              }
+
+              // Update Mullvad button visibility
+              this._updateMullvadButton();
           };
 
-          nodes.addMenuItem(new TailscaleDeviceItem(device_icon, node.name, subtitle, onClick, onLongClick));
-        }
+          // Method to create or remove Mullvad button based on available nodes
+          this._updateMullvadButton = () => {
+              // Remove existing button if it exists
+              if (mullvadButtonItem) {
+                  mullvadButtonItem.destroy();
+                  mullvadButtonItem = null;
+              }
 
-        // Update Mullvad button visibility
-        this._updateMullvadButton();
-      };
+              // Create new button using the helper function
+              mullvadButtonItem = createMullvadExitNodeButton(availableMullvadNodes, tailscale);
 
-      // Method to create or remove Mullvad button based on available nodes
-      this._updateMullvadButton = () => {
-        // Remove existing button if it exists
-        if (mullvadButtonItem) {
-          mullvadButtonItem.destroy();
-          mullvadButtonItem = null;
-        }
+              // Add it to the main menu if it was created
+              if (mullvadButtonItem)
+                  this.menu.addMenuItem(mullvadButtonItem);
+          };
 
-        // Create new button using the helper function
-        mullvadButtonItem = createMullvadExitNodeButton(availableMullvadNodes, tailscale);
+          tailscale.connect('notify::nodes', obj => updateNodes(obj));
+          updateNodes(tailscale);
+          mnodes.menu.addMenuItem(nodes);
+          this.menu.addMenuItem(mnodes);
 
-        // Add it to the main menu if it was created
-        if (mullvadButtonItem) {
-          this.menu.addMenuItem(mullvadButtonItem);
-        }
-      };
+          // SEPARATOR
+          this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      tailscale.connect("notify::nodes", (obj) => update_nodes(obj));
-      update_nodes(tailscale);
-      mnodes.menu.addMenuItem(nodes);
-      this.menu.addMenuItem(mnodes);
+          // PREFS
+          const prefs = new PopupMenu.PopupSubMenuMenuItem(_('Settings'), false, {});
 
-      // SEPARATOR
-      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+          const routes = new PopupMenu.PopupSwitchMenuItem(_('Accept routes'), tailscale.accept_routes, {});
+          tailscale.connect('notify::accept-routes', obj => routes.setToggleState(obj.accept_routes));
+          routes.connect('toggled', item => {
+              tailscale.accept_routes = item.state;
+          });
+          prefs.menu.addMenuItem(routes);
 
-      // PREFS
-      const prefs = new PopupMenu.PopupSubMenuMenuItem(_("Settings"), false, {});
+          const dns = new PopupMenu.PopupSwitchMenuItem(_('Accept DNS'), tailscale.accept_dns, {});
+          tailscale.connect('notify::accept-dns', obj => dns.setToggleState(obj.accept_dns));
+          dns.connect('toggled', item => {
+              tailscale.accept_dns = item.state;
+          });
+          prefs.menu.addMenuItem(dns);
 
-      const routes = new PopupMenu.PopupSwitchMenuItem(_("Accept routes"), tailscale.accept_routes, {});
-      tailscale.connect("notify::accept-routes", (obj) => routes.setToggleState(obj.accept_routes));
-      routes.connect("toggled", (item) => tailscale.accept_routes = item.state);
-      prefs.menu.addMenuItem(routes);
+          const lan = new PopupMenu.PopupSwitchMenuItem(_('Allow LAN access'), tailscale.allow_lan_access, {});
+          tailscale.connect('notify::allow-lan-access', obj => lan.setToggleState(obj.allow_lan_access));
+          lan.connect('toggled', item => {
+              tailscale.allow_lan_access = item.state;
+          });
+          prefs.menu.addMenuItem(lan);
 
-      const dns = new PopupMenu.PopupSwitchMenuItem(_("Accept DNS"), tailscale.accept_dns, {});
-      tailscale.connect("notify::accept-dns", (obj) => dns.setToggleState(obj.accept_dns));
-      dns.connect("toggled", (item) => tailscale.accept_dns = item.state);
-      prefs.menu.addMenuItem(dns);
+          const shields = new PopupMenu.PopupSwitchMenuItem(_('Shields up'), tailscale.shields_up, {});
+          tailscale.connect('notify::shields-up', obj => shields.setToggleState(obj.shields_up));
+          shields.connect('toggled', item => {
+              tailscale.shields_up = item.state;
+          });
+          prefs.menu.addMenuItem(shields);
 
-      const lan = new PopupMenu.PopupSwitchMenuItem(_("Allow LAN access"), tailscale.allow_lan_access, {});
-      tailscale.connect("notify::allow-lan-access", (obj) => lan.setToggleState(obj.allow_lan_access));
-      lan.connect("toggled", (item) => tailscale.allow_lan_access = item.state);
-      prefs.menu.addMenuItem(lan);
+          const ssh = new PopupMenu.PopupSwitchMenuItem(_('SSH'), tailscale.ssh, {});
+          tailscale.connect('notify::ssh', obj => ssh.setToggleState(obj.ssh));
+          ssh.connect('toggled', item => {
+              tailscale.ssh = item.state;
+          });
+          prefs.menu.addMenuItem(ssh);
 
-      const shields = new PopupMenu.PopupSwitchMenuItem(_("Shields up"), tailscale.shields_up, {});
-      tailscale.connect("notify::shields-up", (obj) => shields.setToggleState(obj.shields_up));
-      shields.connect("toggled", (item) => tailscale.shields_up = item.state);
-      prefs.menu.addMenuItem(shields);
+          this.menu.addMenuItem(prefs);
 
-      const ssh = new PopupMenu.PopupSwitchMenuItem(_("SSH"), tailscale.ssh, {});
-      tailscale.connect("notify::ssh", (obj) => ssh.setToggleState(obj.ssh));
-      ssh.connect("toggled", (item) => tailscale.ssh = item.state);
-      prefs.menu.addMenuItem(ssh);
-
-      this.menu.addMenuItem(prefs);
-      
-      // PROFILES
-      const profiles = new PopupMenu.PopupSubMenuMenuItem(_("Profiles"), false, {});
-      const update_profiles = (obj) => {
-        profiles.menu.removeAll();
-        for (const p of obj.profiles) {
-          if (!p.NetworkProfile || !p.NetworkProfile.DomainName) continue; // Skip invalid profiles
-          let enabled = obj._prefs.ControlURL === p.ControlURL && obj._prefs.Config.UserProfile.ID === p.UserProfile.ID;
-          const onClick = () => { tailscale.profiles = p.ID; }
-          profiles.menu.addMenuItem(new TailscaleProfileItem(p.NetworkProfile.DisplayName? p.NetworkProfile.DisplayName : p.Name, p.NetworkProfile.DomainName, enabled, onClick));
-        }
+          // PROFILES
+          const profiles = new PopupMenu.PopupSubMenuMenuItem(_('Profiles'), false, {});
+          const updateProfiles = obj => {
+              profiles.menu.removeAll();
+              for (const p of obj.profiles) {
+                  if (!p.NetworkProfile || !p.NetworkProfile.DomainName)
+                      continue; // Skip invalid profiles
+                  const enabled = obj._prefs.ControlURL === p.ControlURL && obj._prefs.Config.UserProfile.ID === p.UserProfile.ID;
+                  const onClick = () => {
+                      tailscale.profiles = p.ID;
+                  };
+                  profiles.menu.addMenuItem(new TailscaleProfileItem(p.NetworkProfile.DisplayName ? p.NetworkProfile.DisplayName : p.Name, p.NetworkProfile.DomainName, enabled, onClick));
+              }
+          };
+          tailscale.connect('notify::profiles', obj => updateProfiles(obj));
+          updateProfiles(tailscale);
+          this.menu.addMenuItem(profiles);
       }
-      tailscale.connect("notify::profiles", (obj) => update_profiles(obj));
-      update_profiles(tailscale);
-      this.menu.addMenuItem(profiles);
-    }
   }
 );
 
 export default class TailscaleExtension extends Extension {
-  _timeouts = [];
+    _timeouts = [];
 
-  enable() {
-    const icon = Gio.icon_new_for_string(`${this.path}/icons/tailscale-symbolic.svg`);
+    enable() {
+        const icon = Gio.icon_new_for_string(`${this.path}/icons/tailscale-symbolic.svg`);
 
-    this._tailscale = new Tailscale();
-    this._indicator = new TailscaleIndicator(icon, this._tailscale);
-    this._menu = new TailscaleMenuToggle(icon, this._tailscale);
-    if (QuickSettingsMenu.addExternalIndicator) {
-      this._indicator.quickSettingsItems.push(this._menu);
-      QuickSettingsMenu.addExternalIndicator(this._indicator);
-    } else {
-      const timerHandle = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-        if (!QuickSettingsMenu._indicators.get_first_child())
-          return GLib.SOURCE_CONTINUE;
+        this._tailscale = new Tailscale();
+        this._indicator = new TailscaleIndicator(icon, this._tailscale);
+        this._menu = new TailscaleMenuToggle(icon, this._tailscale);
+        if (QuickSettingsMenu.addExternalIndicator) {
+            this._indicator.quickSettingsItems.push(this._menu);
+            QuickSettingsMenu.addExternalIndicator(this._indicator);
+        } else {
+            const timerHandle = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                if (!QuickSettingsMenu._indicators.get_first_child())
+                    return GLib.SOURCE_CONTINUE;
 
-        QuickSettingsMenu._indicators.insert_child_at_index(this._indicator, 0);
-        QuickSettingsMenu._addItems([this._menu]);
-        QuickSettingsMenu.menu._grid.set_child_below_sibling(
-          this._menu,
-          QuickSettingsMenu._backgroundApps.quickSettingsItems[0]
-        );
+                QuickSettingsMenu._indicators.insert_child_at_index(this._indicator, 0);
+                QuickSettingsMenu._addItems([this._menu]);
+                QuickSettingsMenu.menu._grid.set_child_below_sibling(
+                    this._menu,
+                    QuickSettingsMenu._backgroundApps.quickSettingsItems[0]
+                );
 
-        // Remove from tracking and stop
-        const index = this._timeouts.indexOf(timerHandle);
-        if (index > -1) this._timeouts.splice(index, 1);
-        return GLib.SOURCE_REMOVE;
-      });
-      this._timeouts.push(timerHandle);
+                // Remove from tracking and stop
+                const index = this._timeouts.indexOf(timerHandle);
+                if (index > -1)
+                    this._timeouts.splice(index, 1);
+                return GLib.SOURCE_REMOVE;
+            });
+            this._timeouts.push(timerHandle);
+        }
     }
-  }
 
-  disable() {
-    this._timeouts.forEach(id => GLib.Source.remove(id));
-    this._timeouts = [];
+    disable() {
+        this._timeouts.forEach(id => GLib.Source.remove(id));
+        this._timeouts = [];
 
-    this._menu.destroy();
-    this._menu = null;
+        this._menu.destroy();
+        this._menu = null;
 
-    this._indicator.destroy();
-    this._indicator = null;
+        this._indicator.destroy();
+        this._indicator = null;
 
-    this._tailscale.destroy();
-    this._tailscale = null;
-  }
+        this._tailscale.destroy();
+        this._tailscale = null;
+    }
 }

@@ -1,415 +1,420 @@
-import GLib from "gi://GLib";
-import GObject from "gi://GObject";
-import Gio from "gi://Gio";
-import Soup from "gi://Soup?version=3.0";
+import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
+import Gio from 'gi://Gio';
+import Soup from 'gi://Soup?version=3.0';
 
 class TailscaleApiClient {
-  constructor() {
-    const address = new Gio.UnixSocketAddress({
-      path: "/var/run/tailscale/tailscaled.sock",
-    });
-    this.session = new Soup.Session({
-      "remote-connectable": address,
-      "timeout": 0,
-      "idle-timeout": 0,
-    });
-    this.encoder = new TextEncoder();
-    this.decoder = new TextDecoder();
-  }
+    constructor() {
+        const address = new Gio.UnixSocketAddress({
+            path: '/var/run/tailscale/tailscaled.sock',
+        });
+        this.session = new Soup.Session({
+            'remote-connectable': address,
+            'timeout': 0,
+            'idle-timeout': 0,
+        });
+        this.encoder = new TextEncoder();
+        this.decoder = new TextDecoder();
+    }
 
-  async* stream(method, path, cancellable) {
-    const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
+    async* stream(method, path, cancellable) {
+        const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
 
-    const base_stream = this.session.send(message, null);
-    const stream = new Gio.DataInputStream({ base_stream });
-    try {
-      const content_type = message.response_headers.get_one("Content-Type");
-      while (true) {
-        Gio._promisify(Gio.DataInputStream.prototype, "read_line_async");
-        const [_response, length] = await stream.read_line_async(GLib.PRIORITY_DEFAULT, cancellable);
-        if (length == 0) {
-          break;
+        const baseStream = this.session.send(message, null);
+        const stream = new Gio.DataInputStream({base_stream: baseStream});
+        try {
+            const contentType = message.response_headers.get_one('Content-Type');
+            while (true) {
+                Gio._promisify(Gio.DataInputStream.prototype, 'read_line_async');
+                // eslint-disable-next-line no-await-in-loop
+                const [_response, length] = await stream.read_line_async(GLib.PRIORITY_DEFAULT, cancellable);
+                if (length === 0)
+                    break;
+
+                const response = this.decoder.decode(_response);
+                yield contentType === 'application/json' ? JSON.parse(response) : response;
+            }
+        } finally {
+            stream.close(null);
         }
-        const response = this.decoder.decode(_response);
-        yield content_type == "application/json" ? JSON.parse(response) : response;
-      }
-    } finally {
-      stream.close(null);
-    }
-  }
-
-  async request(method, path, body = null) {
-    const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
-    if (body) {
-      const bytes = this.encoder.encode(JSON.stringify(body));
-      message.set_request_body_from_bytes("application/json", new GLib.Bytes(bytes));
     }
 
-    Gio._promisify(Soup.Session.prototype, "send_and_read_async");
-    const response_bytes = await this.session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null);
-    const response = this.decoder.decode(response_bytes.get_data());
-    const content_type = message.response_headers.get_one("Content-Type");
-    return content_type == "application/json" ? JSON.parse(response) : response
-  }
+    async request(method, path, body = null) {
+        const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
+        if (body) {
+            const bytes = this.encoder.encode(JSON.stringify(body));
+            message.set_request_body_from_bytes('application/json', new GLib.Bytes(bytes));
+        }
+
+        Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
+        const responseBytes = await this.session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null);
+        const response = this.decoder.decode(responseBytes.get_data());
+        const contentType = message.response_headers.get_one('Content-Type');
+        return contentType === 'application/json' ? JSON.parse(response) : response;
+    }
 }
 
 export const Tailscale = GObject.registerClass(
-  {
-    Properties: {
-      "running": GObject.ParamSpec.boolean(
-        "running", "", "",
-        GObject.ParamFlags.READWRITE,
-        false
-      ),
-      "accept-dns": GObject.ParamSpec.boolean(
-        "accept-dns", "", "",
-        GObject.ParamFlags.READWRITE,
-        false
-      ),
-      "accept-routes": GObject.ParamSpec.boolean(
-        "accept-routes", "", "",
-        GObject.ParamFlags.READWRITE,
-        false
-      ),
-      "allow-lan-access": GObject.ParamSpec.boolean(
-        "allow-lan-access", "", "",
-        GObject.ParamFlags.READWRITE,
-        false
-      ),
-      "shields-up": GObject.ParamSpec.boolean(
-        "shields-up", "", "",
-        GObject.ParamFlags.READWRITE,
-        false
-      ),
-      "ssh": GObject.ParamSpec.boolean(
-        "ssh", "", "",
-        GObject.ParamFlags.READWRITE,
-        false
-      ),
-      "exit-node": GObject.ParamSpec.string(
-        "exit-node", "", "",
-        GObject.ParamFlags.READWRITE,
-        ""
-      ),
-      "exit-node-name": GObject.ParamSpec.string(
-        "exit-node-name", "", "",
-        GObject.ParamFlags.READABLE,
-        ""
-      ),
-      "nodes": GObject.ParamSpec.jsobject(
-        "nodes", "", "",
-        GObject.ParamFlags.READABLE,
-        []
-      ),
-      "profiles": GObject.ParamSpec.jsobject(
-        "profiles", "", "",
-        GObject.ParamFlags.READABLE,
-        []
-      ),
+    {
+        Properties: {
+            'running': GObject.ParamSpec.boolean(
+                'running', '', '',
+                GObject.ParamFlags.READWRITE,
+                false
+            ),
+            'accept-dns': GObject.ParamSpec.boolean(
+                'accept-dns', '', '',
+                GObject.ParamFlags.READWRITE,
+                false
+            ),
+            'accept-routes': GObject.ParamSpec.boolean(
+                'accept-routes', '', '',
+                GObject.ParamFlags.READWRITE,
+                false
+            ),
+            'allow-lan-access': GObject.ParamSpec.boolean(
+                'allow-lan-access', '', '',
+                GObject.ParamFlags.READWRITE,
+                false
+            ),
+            'shields-up': GObject.ParamSpec.boolean(
+                'shields-up', '', '',
+                GObject.ParamFlags.READWRITE,
+                false
+            ),
+            'ssh': GObject.ParamSpec.boolean(
+                'ssh', '', '',
+                GObject.ParamFlags.READWRITE,
+                false
+            ),
+            'exit-node': GObject.ParamSpec.string(
+                'exit-node', '', '',
+                GObject.ParamFlags.READWRITE,
+                ''
+            ),
+            'exit-node-name': GObject.ParamSpec.string(
+                'exit-node-name', '', '',
+                GObject.ParamFlags.READABLE,
+                ''
+            ),
+            'nodes': GObject.ParamSpec.jsobject(
+                'nodes', '', '',
+                GObject.ParamFlags.READABLE,
+                []
+            ),
+            'profiles': GObject.ParamSpec.jsobject(
+                'profiles', '', '',
+                GObject.ParamFlags.READABLE,
+                []
+            ),
+        },
     },
-  },
-  class Tailscale extends GObject.Object {
-    _init() {
-      super._init();
-      this._client = new TailscaleApiClient();
-      this._running = false;
-      this._dns = false;
-      this._routes = false;
-      this._allow_lan_access = false;
-      this._shields_up = false;
-      this._ssh = false;
-      this._exit_node = "";
-      this._exit_node_name = null;
-      this._nodes = [];
-      this._profiles = [];
-      this._cancelable = new Gio.Cancellable();
-      this._timeouts = [];
-      this._listen();
-    }
+    class Tailscale extends GObject.Object {
+        _init() {
+            super._init();
+            this._client = new TailscaleApiClient();
+            this._running = false;
+            this._dns = false;
+            this._routes = false;
+            this._allowLanAccess = false;
+            this._shields_up = false;
+            this._ssh = false;
+            this._exitNode = '';
+            this._exitNodeName = null;
+            this._nodes = [];
+            this._profiles = [];
+            this._cancelable = new Gio.Cancellable();
+            this._timeouts = [];
+            this._listen();
+        }
 
-    destroy() {
-      this._cancelable.cancel();
-      this._client.session.abort();
-      this._timeouts.forEach(id => GLib.Source.remove(id));
-      this._timeouts = [];
-    }
+        destroy() {
+            this._cancelable.cancel();
+            this._client.session.abort();
+            this._timeouts.forEach(id => GLib.Source.remove(id));
+            this._timeouts = [];
+        }
 
-    _process_running(prefs) {
-      const running = prefs.WantRunning;
-      if (running != this._running) {
-        this._running = running;
-        this.notify("running");
-      }
-    }
+        _processRunning(prefs) {
+            const running = prefs.WantRunning;
+            if (running !== this._running) {
+                this._running = running;
+                this.notify('running');
+            }
+        }
 
-    _process_nodes(prefs, peers) {
-      const nodes = peers
+        _processNodes(prefs, peers) {
+            const nodes = peers
         .map(peer => {
-          const node = {
-            id: peer.ID,
-            name: peer.DNSName.split(".")[0],
-            os: peer.OS,
-            exit_node: peer.ID == prefs.ExitNodeID,
-            exit_node_option: peer.ExitNodeOption,
-            online: peer.Online,
-            ips: peer.TailscaleIPs,
-            mullvad: peer.Tags?.includes("tag:mullvad-exit-node") || false,
-            location: peer.Location,
-          };
-          return node;
+            const node = {
+                id: peer.ID,
+                name: peer.DNSName.split('.')[0],
+                os: peer.OS,
+                exit_node: peer.ID === prefs.ExitNodeID,
+                exit_node_option: peer.ExitNodeOption,
+                online: peer.Online,
+                ips: peer.TailscaleIPs,
+                mullvad: peer.Tags?.includes('tag:mullvad-exit-node') || false,
+                location: peer.Location,
+            };
+            return node;
         })
         .sort((a, b) =>
-          (b.exit_node - a.exit_node)
-          || (b.online - a.online)
-          || (b.exit_node_option - a.exit_node_option)
-          || a.name.localeCompare(b.name)
+            (b.exit_node - a.exit_node) ||
+          (b.online - a.online) ||
+          (b.exit_node_option - a.exit_node_option) ||
+          a.name.localeCompare(b.name)
         );
 
-      if (JSON.stringify(nodes) != JSON.stringify(this._nodes)) {
-        this._nodes = nodes;
-        this.notify("nodes");
-      }
-    }
-
-    _process_exit_node(prefs) {
-      const exit_node_id = prefs.ExitNodeID;
-      if (exit_node_id != this._exit_node) {
-        this._exit_node = exit_node_id;
-        this.notify("exit-node");
-        const exitNodePeer = this._peers.find(peer => peer.ID === exit_node_id);
-        this._exit_node_name = exitNodePeer ? exitNodePeer.DNSName.split(".")[0] : null;
-        this.notify("exit-node-name");
-      }
-    }
-
-    _process_dns(prefs) {
-      const accept_dns = prefs.CorpDNS;
-      if (accept_dns != this._dns) {
-        this._dns = accept_dns;
-        this.notify("accept-dns");
-      }
-    }
-
-    _process_routes(prefs) {
-      const accept_routes = prefs.RouteAll;
-      if (accept_routes != this._routes) {
-        this._routes = accept_routes;
-        this.notify("accept-routes");
-      }
-    }
-
-    _process_lan(prefs) {
-      const allow_lan_access = prefs.ExitNodeAllowLANAccess;
-      if (allow_lan_access != this._allow_lan_access) {
-        this._allow_lan_access = allow_lan_access;
-        this.notify("allow-lan-access");
-      }
-    }
-
-    _process_shields(prefs) {
-      const shields_up = prefs.ShieldsUp;
-      if (shields_up != this._shields_up) {
-        this._shields_up = shields_up;
-        this.notify("shields-up");
-      }
-    }
-
-    _process_ssh(prefs) {
-      const ssh = prefs.RunSSH;
-      if (ssh != this._ssh) {
-        this._ssh = ssh;
-        this.notify("ssh");
-      }
-    }
-
-    get running() {
-      return this._running;
-    }
-
-    set running(value) {
-      if (this.running === value)
-        return;
-
-      this._update_prefs({ WantRunning: value });
-    }
-
-    get accept_dns() {
-      return this._dns;
-    }
-
-    set accept_dns(value) {
-      if (this.accept_dns === value)
-        return;
-
-      this._update_prefs({ CorpDNS: value });
-    }
-
-    get accept_routes() {
-      return this._routes;
-    }
-
-    set accept_routes(value) {
-      if (this.accept_routes === value)
-        return;
-
-      this._update_prefs({ RouteAll: value });
-    }
-
-    get allow_lan_access() {
-      return this._allow_lan_access;
-    }
-
-    set allow_lan_access(value) {
-      if (this.allow_lan_access === value)
-        return;
-
-      this._update_prefs({ ExitNodeAllowLANAccess: value });
-    }
-
-    get shields_up() {
-      return this._shields_up;
-    }
-
-    set shields_up(value) {
-      if (this.shields_up === value)
-        return;
-
-      this._update_prefs({ ShieldsUp: value });
-    }
-
-    get ssh() {
-      return this._ssh;
-    }
-
-    set ssh(value) {
-      if (this.ssh === value)
-        return;
-
-      this._update_prefs({ RunSSH: value });
-    }
-
-    get exit_node() {
-      return this._exit_node;
-    }
-
-    set exit_node(value) {
-      if (this.exit_node === value)
-        return;
-
-      this._update_prefs({ ExitNodeID: value });
-    }
-
-    get exit_node_name() {
-      return this._exit_node_name;
-    }
-
-    get nodes() {
-      return this._nodes;
-    }
-
-    get profiles() {
-      return this._profiles;
-    }
-
-    set profiles(value) {
-      this._update_profile(value);
-    }
-
-    async _listen() {
-      const delay = (delay) => new Promise(resolve => {
-        const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
-          const index = this._timeouts.indexOf(id);
-          if (index > -1) this._timeouts.splice(index, 1);
-          resolve();
-          return GLib.SOURCE_REMOVE;
-        });
-        this._timeouts.push(id);
-      });
-
-      while (true) {
-        try {
-          const status = await this._client.request("GET", "/localapi/v0/status")
-          this._peers = Object.values(status.Peer || {});
-          this._prefs = await this._client.request("GET", "/localapi/v0/prefs")
-          this._profiles = await this._client.request("GET", "/localapi/v0/profiles/")
-          this.notify("profiles");
-          this._parse_response();
-
-          for await (const update of this._client.stream("GET", "/localapi/v0/watch-ipn-bus", this._cancelable)) {
-            let should_update = false;
-            if (update.Prefs) {
-              this._prefs = update.Prefs;
-              should_update = true;
+            if (JSON.stringify(nodes) !== JSON.stringify(this._nodes)) {
+                this._nodes = nodes;
+                this.notify('nodes');
             }
-            if (update.NetMap) {
-              this._peers = update.NetMap.Peers.map(peer => ({
-                ID: peer.StableID,
-                DNSName: peer.Name,
-                OS: peer.Hostinfo.OS,
-                ExitNodeOption: peer.AllowedIPs?.includes("0.0.0.0/0"),
-                Online: peer.Online,
-                TailscaleIPs: peer.Addresses.map(address => address.split("/")[0]),
-                Tags: peer.Tags,
-                Location: peer.Hostinfo.Location
-              }));
-              should_update = true;
-            }
-            if (should_update) {
-              this._parse_response();
-            }
-          }
-        } catch (error) {
-          if (this._cancelable.is_cancelled()) {
-            break;
-          }
-          console.error(error);
-          this._process_running({ WantRunning: false });
         }
-        await delay(5000);
-      }
-    }
 
-    _parse_response() {
-      if (this._prefs) {
-        this._process_running(this._prefs);
-        this._process_dns(this._prefs);
-        this._process_routes(this._prefs);
-        this._process_lan(this._prefs);
-        this._process_shields(this._prefs);
-        this._process_ssh(this._prefs);
-        this._process_exit_node(this._prefs);
-        if (this._peers) {
-          this._process_nodes(this._prefs, this._peers);
+        _processExitNode(prefs) {
+            const exitNodeId = prefs.ExitNodeID;
+            if (exitNodeId !== this._exitNode) {
+                this._exitNode = exitNodeId;
+                this.notify('exit-node');
+                const exitNodePeer = this._peers.find(peer => peer.ID === exitNodeId);
+                this._exitNodeName = exitNodePeer ? exitNodePeer.DNSName.split('.')[0] : null;
+                this.notify('exit-node-name');
+            }
         }
-      }
-    }
 
-    _update_prefs(prefs) {
-      const body = {
-        ...prefs,
-        ...Object.fromEntries(
-          Object.entries(prefs)
-            .map(([key, _]) => [`${key}set`, true]),
-        ),
-      }
-      this._client.request("PATCH", "/localapi/v0/prefs", body)
-        .then(
-          (prefs) => {
-            this._prefs = prefs;
-            this._parse_response();
-          },
-          (error) => console.error(error),
-        );
-    }
+        _processDns(prefs) {
+            const acceptDns = prefs.CorpDNS;
+            if (acceptDns !== this._dns) {
+                this._dns = acceptDns;
+                this.notify('accept-dns');
+            }
+        }
 
-    _update_profile(value) {
-      this._client.request("POST", `/localapi/v0/profiles/${value}`, {})
+        _processRoutes(prefs) {
+            const acceptRoutes = prefs.RouteAll;
+            if (acceptRoutes !== this._routes) {
+                this._routes = acceptRoutes;
+                this.notify('accept-routes');
+            }
+        }
+
+        _processLan(prefs) {
+            const allowLanAccess = prefs.ExitNodeAllowLANAccess;
+            if (allowLanAccess !== this._allowLanAccess) {
+                this._allowLanAccess = allowLanAccess;
+                this.notify('allow-lan-access');
+            }
+        }
+
+        _processShields(prefs) {
+            const shieldsUp = prefs.ShieldsUp;
+            if (shieldsUp !== this._shields_up) {
+                this._shields_up = shieldsUp;
+                this.notify('shields-up');
+            }
+        }
+
+        _processSsh(prefs) {
+            const ssh = prefs.RunSSH;
+            if (ssh !== this._ssh) {
+                this._ssh = ssh;
+                this.notify('ssh');
+            }
+        }
+
+        get running() {
+            return this._running;
+        }
+
+        set running(value) {
+            if (this.running === value)
+                return;
+
+            this._updatePrefs({WantRunning: value});
+        }
+
+        get accept_dns() {
+            return this._dns;
+        }
+
+        set accept_dns(value) {
+            if (this.accept_dns === value)
+                return;
+
+            this._updatePrefs({CorpDNS: value});
+        }
+
+        get accept_routes() {
+            return this._routes;
+        }
+
+        set accept_routes(value) {
+            if (this.accept_routes === value)
+                return;
+
+            this._updatePrefs({RouteAll: value});
+        }
+
+        get allow_lan_access() {
+            return this._allowLanAccess;
+        }
+
+        set allow_lan_access(value) {
+            if (this.allow_lan_access === value)
+                return;
+
+            this._updatePrefs({ExitNodeAllowLANAccess: value});
+        }
+
+        get shields_up() {
+            return this._shields_up;
+        }
+
+        set shields_up(value) {
+            if (this.shields_up === value)
+                return;
+
+            this._updatePrefs({ShieldsUp: value});
+        }
+
+        get ssh() {
+            return this._ssh;
+        }
+
+        set ssh(value) {
+            if (this.ssh === value)
+                return;
+
+            this._updatePrefs({RunSSH: value});
+        }
+
+        get exit_node() {
+            return this._exitNode;
+        }
+
+        set exit_node(value) {
+            if (this.exit_node === value)
+                return;
+
+            this._updatePrefs({ExitNodeID: value});
+        }
+
+        get exit_node_name() {
+            return this._exitNodeName;
+        }
+
+        get nodes() {
+            return this._nodes;
+        }
+
+        get profiles() {
+            return this._profiles;
+        }
+
+        set profiles(value) {
+            this._updateProfile(value);
+        }
+
+        async _listen() {
+            const delayPromise = delay => new Promise(resolve => {
+                const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+                    const index = this._timeouts.indexOf(id);
+                    if (index > -1)
+                        this._timeouts.splice(index, 1);
+                    resolve();
+                    return GLib.SOURCE_REMOVE;
+                });
+                this._timeouts.push(id);
+            });
+
+            while (true) {
+                try {
+                    // eslint-disable-next-line no-await-in-loop
+                    const status = await this._client.request('GET', '/localapi/v0/status');
+                    this._peers = Object.values(status.Peer || {});
+                    // eslint-disable-next-line no-await-in-loop
+                    this._prefs = await this._client.request('GET', '/localapi/v0/prefs');
+                    // eslint-disable-next-line no-await-in-loop
+                    this._profiles = await this._client.request('GET', '/localapi/v0/profiles/');
+                    this.notify('profiles');
+                    this._parseResponse();
+
+                    // eslint-disable-next-line no-await-in-loop
+                    for await (const update of this._client.stream('GET', '/localapi/v0/watch-ipn-bus', this._cancelable)) {
+                        let shouldUpdate = false;
+                        if (update.Prefs) {
+                            this._prefs = update.Prefs;
+                            shouldUpdate = true;
+                        }
+                        if (update.NetMap) {
+                            this._peers = update.NetMap.Peers.map(peer => ({
+                                ID: peer.StableID,
+                                DNSName: peer.Name,
+                                OS: peer.Hostinfo.OS,
+                                ExitNodeOption: peer.AllowedIPs?.includes('0.0.0.0/0'),
+                                Online: peer.Online,
+                                TailscaleIPs: peer.Addresses.map(address => address.split('/')[0]),
+                                Tags: peer.Tags,
+                                Location: peer.Hostinfo.Location,
+                            }));
+                            shouldUpdate = true;
+                        }
+                        if (shouldUpdate)
+                            this._parseResponse();
+                    }
+                } catch (error) {
+                    if (this._cancelable.is_cancelled())
+                        break;
+
+                    console.error(error);
+                    this._processRunning({WantRunning: false});
+                }
+                // eslint-disable-next-line no-await-in-loop
+                await delayPromise(5000);
+            }
+        }
+
+        _parseResponse() {
+            if (this._prefs) {
+                this._processRunning(this._prefs);
+                this._processDns(this._prefs);
+                this._processRoutes(this._prefs);
+                this._processLan(this._prefs);
+                this._processShields(this._prefs);
+                this._processSsh(this._prefs);
+                this._processExitNode(this._prefs);
+                if (this._peers)
+                    this._processNodes(this._prefs, this._peers);
+            }
+        }
+
+        _updatePrefs(prefUpdatePartial) {
+            const body = {
+                ...prefUpdatePartial,
+                ...Object.fromEntries(
+                    Object.entries(prefUpdatePartial)
+            .map(([key, _]) => [`${key}set`, true])
+                ),
+            };
+            this._client.request('PATCH', '/localapi/v0/prefs', body)
         .then(
-          () => {
-            this.notify('profiles');
-          },
-          (error) => console.error(error),
+            prefs => {
+                this._prefs = prefs;
+                this._parseResponse();
+            },
+            error => console.error(error)
         );
+        }
+
+        _updateProfile(value) {
+            this._client.request('POST', `/localapi/v0/profiles/${value}`, {})
+        .then(
+            () => {
+                this.notify('profiles');
+            },
+            error => console.error(error)
+        );
+        }
     }
-  }
 );
