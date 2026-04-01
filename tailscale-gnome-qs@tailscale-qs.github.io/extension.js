@@ -371,7 +371,7 @@ const TailscaleMenuToggle = GObject.registerClass(
           if (!p.NetworkProfile || !p.NetworkProfile.DomainName) continue; // Skip invalid profiles
           let enabled = obj._prefs.ControlURL === p.ControlURL && obj._prefs.Config.UserProfile.ID === p.UserProfile.ID;
           const onClick = () => { tailscale.profiles = p.ID; }
-          profiles.menu.addMenuItem(new TailscaleProfileItem(p.Name, p.NetworkProfile.DomainName, enabled, onClick));
+          profiles.menu.addMenuItem(new TailscaleProfileItem(p.NetworkProfile.DisplayName? p.NetworkProfile.DisplayName : p.Name, p.NetworkProfile.DomainName, enabled, onClick));
         }
       }
       tailscale.connect("notify::profiles", (obj) => update_profiles(obj));
