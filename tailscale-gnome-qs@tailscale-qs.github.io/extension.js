@@ -297,7 +297,7 @@ const TailscaleMenuToggle = GObject.registerClass(
 
             St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, node.ips[0]);
             St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, node.ips[0]);
-            Main.osdWindowManager.showOne(-1, icon, _("IP address has been copied to the clipboard"));
+            Main.osdWindowManager.showAll(icon, _("IP address has been copied to the clipboard"));
             return true;
           };
 
