@@ -1,0 +1,20 @@
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  package-and-upload:
+    name: Package and Upload GNOME Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package and Upload GNOME Extension
+        uses: murar8/gnome-extensions-action@aad5516b92eeed1014a06a6e7d47d34c96fd82c5
+        with:
+          source-dir: tailscale-gnome-qs@tailscale-qs.github.io
+          username: ${{ secrets.GNOME_USERNAME }}
+          password: ${{ secrets.GNOME_PASSWORD }}
+          accept-tos: true
