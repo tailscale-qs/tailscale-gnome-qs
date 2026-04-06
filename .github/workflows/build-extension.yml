@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
 
@@ -21,7 +21,10 @@ jobs:
       run: |
         make build
 
-    - uses: actions/upload-artifact@v4
+    - name: linter
+      uses: reviewdog/action-eslint@2fee6dd72a5419ff4113f694e2068d2a03bb35dd # v1.33.2
       with:
-        name: tailscale-gnome-qs@tailscale-qs.github.zip
-        path: tailscale-gnome-qs@tailscale-qs.github.zip
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        reporter: github-check
+        eslint_flags: "tailscale-gnome-qs@tailscale-qs.github.io/"
+        fail_level: warning
