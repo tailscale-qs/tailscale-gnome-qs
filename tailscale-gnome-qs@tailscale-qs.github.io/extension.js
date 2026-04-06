@@ -39,7 +39,7 @@ import {filterMullvadNodes, createMullvadExitNodeButton} from './mullvad.js';
 export const DisableExitNodeButton = GObject.registerClass(
   class DisableExitNodeButton extends St.Button {
       _init(tailscale) {
-          const isExitNodeActive = tailscale.exit_node !== '';
+    const isExitNodeActive = tailscale.exit_node !== '';
 
           super._init({
               style_class: 'icon-button',
