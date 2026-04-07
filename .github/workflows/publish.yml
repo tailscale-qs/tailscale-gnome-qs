@@ -1,16 +1,46 @@
+name: Release Plugin
 on:
   push:
     tags:
       - 'v*'
-
 jobs:
   package-and-upload:
     name: Package and Upload GNOME Extension
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Cache Apt Packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: make gettext gnome-shell
+          version: 1.0
+      - name: Verify linted
+        uses: reviewdog/action-eslint@2fee6dd72a5419ff4113f694e2068d2a03bb35dd # v1.33.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-check
+          eslint_flags: "tailscale-gnome-qs@tailscale-qs.github.io/"
+          fail_level: warning
+      - name: Add Version name
+        uses: jossef/action-set-json-field@v2.1
+        with:
+          file: tailscale-gnome-qs@tailscale-qs.github.io/metadata.json
+          field: version-name
+          value: ${{ github.ref_name }}
+      - name: Test extension builds from scratch
+        run: |
+          make build && cd ../
+      - name: Create Release
+        run: gh release create ${{ github.ref_name }} --generate-notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to Existing Release
+        run: gh release upload ${{ github.ref_name }} tailscale-gnome-qs@tailscale-qs.github.io.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Package and Upload GNOME Extension
         uses: murar8/gnome-extensions-action@aad5516b92eeed1014a06a6e7d47d34c96fd82c5
         with:

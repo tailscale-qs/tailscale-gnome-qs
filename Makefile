@@ -1,6 +1,6 @@
 UUID = tailscale-gnome-qs@tailscale-qs.github.io
-BUNDLE_PATH = "$(UUID).zip"
-EXTENSION_DIR = "$(UUID)"
+BUNDLE_PATH = $(UUID).zip
+EXTENSION_DIR = $(UUID)
 all: build install
 .PHONY: build install clean
 build:

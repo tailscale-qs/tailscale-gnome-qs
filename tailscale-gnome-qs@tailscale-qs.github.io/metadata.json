@@ -11,6 +11,5 @@
     "50"
   ],
   "url": "https://github.com/tailscale-qs/tailscale-gnome-qs",
-  "gettext-domain": "tailscale-gnome-qs@tailscale-qs.github.io",
-  "version": 5
+  "gettext-domain": "tailscale-gnome-qs@tailscale-qs.github.io"
 }
