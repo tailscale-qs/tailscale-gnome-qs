@@ -1,0 +1,35 @@
+name: Reviewdog ESLint PR
+on: 
+  pull_request_target:
+    paths:
+      - '**.js'
+jobs:
+  eslint:
+    name: runner-eslint
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      checks: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout pr
+        uses: actions/checkout@v5
+        with:
+          # Use the SHA from the PR head to get the specific incoming code
+          ref: ${{ github.event.pull_request.head.sha }}
+          # If the PR is from a fork, you must also specify the repository
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - uses: reviewdog/action-eslint@v1.34.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          eslint_flags: "tailscale-gnome-qs@tailscale-qs.github.io/"
+          fail_level: warning
+          filter_mode: file
