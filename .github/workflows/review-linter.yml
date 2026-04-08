@@ -1,16 +1,23 @@
-name: reviewdog eslint pr
-on: [pull_request, workflow_dispatch]
+name: Reviewdog ESLint PR
+on: [pull_request]
 jobs:
   eslint:
-    name: runner / eslint
+    name: runner-eslint
     runs-on: ubuntu-latest
     permissions:
       actions: write
       checks: write
-      contents: read
+      contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout pr
+        uses: actions/checkout@v5
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
       - uses: reviewdog/action-eslint@v1.34.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
