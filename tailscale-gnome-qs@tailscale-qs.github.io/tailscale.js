@@ -13,9 +13,9 @@ class TailscaleApiClient {
             'timeout': 0,
             'idle-timeout': 0,
         });
-        this.encoder = new TextEncoder();
-        this.decoder = new TextDecoder();
-    }
+      this.encoder = new TextEncoder();
+      this.decoder = new TextDecoder();
+  }
 
     async* stream(method, path, cancellable) {
         const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
@@ -23,10 +23,9 @@ class TailscaleApiClient {
         const baseStream = this.session.send(message, null);
         const stream = new Gio.DataInputStream({base_stream: baseStream});
         try {
-            const contentType = message.response_headers.get_one('Content-Type');
+        const contentType = message.response_headers.get_one('Content-Type');
             while (true) {
                 Gio._promisify(Gio.DataInputStream.prototype, 'read_line_async');
-                // eslint-disable-next-line no-await-in-loop
                 const [_response, length] = await stream.read_line_async(GLib.PRIORITY_DEFAULT, cancellable);
                 if (length === 0)
                     break;
