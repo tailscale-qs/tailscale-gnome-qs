@@ -1,6 +1,6 @@
 {
   "name": "Tailscale QS",
-  "description": "Add Tailscale to GNOME quick settings. Fork of joaophi/tailscale-gnome-qs with continued maintenance and improvements.\n\nMake sure you set your user as tailscale operator:\nsudo tailscale set --operator=$USER",
+  "description": "Add Tailscale to GNOME quick settings. Fork of joaophi/tailscale-gnome-qs with continued maintenance and improvements.\n\nFeatures:\n\t\t*Quick Toggle — Enable/disable Tailscale directly from the Quick Settings panel\n\t\t*Copy Node's IP - Long-click a node to copy that node's ip address to the clipboard\n\t\t*Exit Nodes — Select and disconnect exit nodes, including Mullvad support with country flag display\n\t\t*Multi-Account — Switch between multiple Tailscale accounts (profiles)\n\t\t*Status Indicator — Visual indication of your Tailscale connection status\n\n_NOTE_:This extension accesses the clipboard to copy the node ip address.\n_NOTE_:Make sure you set your user as tailscale operator:\t`sudo tailscale set --operator=$USER`",
   "uuid": "tailscale-gnome-qs@tailscale-qs.github.io",
   "shell-version": [
     "45",
