@@ -241,13 +241,22 @@ const TailscaleMenuToggle = GObject.registerClass(
           return 'computer-symbolic';
       }
 
-      _getNodeSubtitle(node) {
+      _getNodeSubtitle(node, isSelfExitNode) {
           if (node.exit_node)
               return _('disable exit node');
+          if (isSelfExitNode && node.exit_node_option)
+              return _('exit node');
           if (node.exit_node_option)
               return _('use as exit node');
 
           return '';
+      }
+
+      _nodeSortingFunction(a, b) {
+          return (b.exit_node - a.exit_node) ||
+        (b.exit_node_option - a.exit_node_option) ||
+        (b.online - a.online) ||
+        a.name.localeCompare(b.name);
       }
 
       _init(icon, tailscale) {
@@ -293,16 +302,17 @@ const TailscaleMenuToggle = GObject.registerClass(
 
           const updateNodes = obj => {
               nodes.removeAll();
+              const isSelfExitNode = obj.selfNode.ExitNodeOption;
 
               // Separate Mullvad nodes from regular nodes and filter only online Mullvad nodes
               availableMullvadNodes = filterMullvadNodes(obj.nodes);
-              const regularNodes = obj.nodes.filter(node => !node.mullvad || node.exit_node);
+              const regularNodes = Object.values(obj.nodes).filter(node => !node.mullvad || node.exit_node).sort(this._nodeSortingFunction);
 
               // Add regular nodes to main menu
               for (const node of regularNodes) {
                   const deviceIcon = this._getIconName(node);
-                  const subtitle = this._getNodeSubtitle(node);
-                  const onClick = node.exit_node_option ? () => {
+                  const subtitle = this._getNodeSubtitle(node, isSelfExitNode);
+                  const onClick = !isSelfExitNode && node.exit_node_option ? () => {
                       tailscale.exit_node = node.exit_node ? '' : node.id;
                   } : null;
                   const onLongClick = () => {
