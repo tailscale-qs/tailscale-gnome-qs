@@ -650,7 +650,7 @@ export const MullvadExitNodeDialog = GObject.registerClass(
        * @private
        */
       _setupEventHandlers() {
-      // Set initial focus to search entry
+          // Set initial focus to search entry
           this.setInitialKeyFocus(this._searchEntry);
 
           // Connect search query changed event
