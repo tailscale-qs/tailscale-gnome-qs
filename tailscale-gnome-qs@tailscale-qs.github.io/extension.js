@@ -49,9 +49,10 @@ export const DisableExitNodeButton = GObject.registerClass(
               reactive: isExitNodeActive,
           });
 
-          this.connect('clicked', () => {
+          this._exitNodeClicked = this.connect('clicked', () => {
               tailscale.exit_node = '';
               this.reactive = false;
+              return true;
           });
       }
   }
@@ -72,10 +73,19 @@ const TailscaleIndicator = GObject.registerClass(
           exit.icon_name = 'network-vpn-symbolic';
           const setVisible = () => {
               exit.visible = tailscale.running && tailscale.exit_node !== '';
+              return true;
           };
-          tailscale.connect('notify::exit-node', () => setVisible());
-          tailscale.connect('notify::running', () => setVisible());
+          this._exitNodeNotifier = tailscale.connect('notify::exit-node', () => setVisible());
+          this._RunningNotifier = tailscale.connect('notify::running', () => setVisible());
           setVisible();
+      }
+
+      destroy() {
+          GLib.Source.remove(this._exitNodeNotifier);
+          this._exitNodeNotifier = null;
+          GLib.Source.remove(this._RunningNotifier);
+          this._RunningNotifier = null;
+          super.destroy();
       }
   }
 );
@@ -105,7 +115,8 @@ const TailscaleDeviceItem = GObject.registerClass(
           this.add_child(sub);
           sub.text = subtitle;
 
-          this.connect('activate', () => onClick?.());
+          this._connectEvents = [];
+          this._connectEvents.push(this.connect('activate', () => onClick?.()));
 
           const shellVersion = parseInt(Config.PACKAGE_VERSION.split('.')[0]);
 
@@ -113,13 +124,13 @@ const TailscaleDeviceItem = GObject.registerClass(
               const clickGesture = this._clickGesture ?? (() => {
                   const action = new Clutter.ClickGesture();
                   this.add_action(action);
-                  action.connect('notify::pressed', () => {
+                  this._connectEvents.push(action.connect('notify::pressed', () => {
                       if (action.pressed)
                           this.add_style_pseudo_class('active');
                       else
                           this.remove_style_pseudo_class('active');
-                  });
-                  action.connect('recognize', () => this.activate(Clutter.get_current_event()));
+                  }));
+                  this._connectEvents.push(action.connect('recognize', () => this.activate(Clutter.get_current_event())));
                   return action;
               })();
               clickGesture.enabled = true;
@@ -127,13 +138,13 @@ const TailscaleDeviceItem = GObject.registerClass(
               const longPressGesture = this._longPressGesture ?? (() => {
                   const action = new Clutter.LongPressGesture();
                   this.add_action(action);
-                  action.connect('notify::pressed', () => {
+                  this._connectEvents.push(action.connect('notify::pressed', () => {
                       if (action.pressed)
                           this.add_style_pseudo_class('active');
                       else
                           this.remove_style_pseudo_class('active');
-                  });
-                  action.connect('recognize', () => onLongClick());
+                  }));
+                  this._connectEvents.push(action.connect('recognize', () => onLongClick()));
                   return action;
               })();
               longPressGesture.enabled = true;
@@ -141,7 +152,7 @@ const TailscaleDeviceItem = GObject.registerClass(
               // GNOME 46 fallback - use traditional click handling
               let pressTimeout = null;
 
-              this.connect('button-press-event', (_actor, event) => {
+              this._connectEvents.push(this.connect('button-press-event', (_actor, event) => {
                   if (event.get_button() === 1) {
                       pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
                           pressTimeout = null;
@@ -150,9 +161,9 @@ const TailscaleDeviceItem = GObject.registerClass(
                       });
                   }
                   return Clutter.EVENT_PROPAGATE;
-              });
+              }));
 
-              this.connect('button-release-event', (_actor, event) => {
+              this._connectEvents.push(this.connect('button-release-event', (_actor, event) => {
                   if (event.get_button() === 1) {
                       if (pressTimeout) {
                           // Released before long press fired - treat as normal click
@@ -163,7 +174,7 @@ const TailscaleDeviceItem = GObject.registerClass(
                       return Clutter.EVENT_STOP;
                   }
                   return Clutter.EVENT_PROPAGATE;
-              });
+              }));
           }
       }
 
@@ -241,13 +252,22 @@ const TailscaleMenuToggle = GObject.registerClass(
           return 'computer-symbolic';
       }
 
-      _getNodeSubtitle(node) {
+      _getNodeSubtitle(node, isSelfExitNode) {
           if (node.exit_node)
               return _('disable exit node');
+          if (isSelfExitNode && node.exit_node_option)
+              return _('exit node');
           if (node.exit_node_option)
               return _('use as exit node');
 
           return '';
+      }
+
+      _nodeSortingFunction(a, b) {
+          return (b.exit_node - a.exit_node) ||
+        (b.exit_node_option - a.exit_node_option) ||
+        (b.online - a.online) ||
+        a.name.localeCompare(b.name);
       }
 
       _init(icon, tailscale) {
@@ -276,7 +296,7 @@ const TailscaleMenuToggle = GObject.registerClass(
           // This function is unique to this class. It adds a nice header with an
           // icon, title and optional subtitle. It's recommended you do so for
           // consistency with other menus.
-          tailscale.connect('notify::exit-node-name', () => {
+          this._notifyExitNodeName = tailscale.connect('notify::exit-node-name', () => {
               this.subtitle = tailscale.exit_node_name;
               this.menu.setHeader(icon, this.title, this.subtitle);
               disableExitNodeButton.reactive = tailscale.exit_node !== '';
@@ -293,16 +313,17 @@ const TailscaleMenuToggle = GObject.registerClass(
 
           const updateNodes = obj => {
               nodes.removeAll();
+              const isSelfExitNode = obj.selfNode.ExitNodeOption;
 
               // Separate Mullvad nodes from regular nodes and filter only online Mullvad nodes
               availableMullvadNodes = filterMullvadNodes(obj.nodes);
-              const regularNodes = obj.nodes.filter(node => !node.mullvad || node.exit_node);
+              const regularNodes = Object.values(obj.nodes).filter(node => !node.mullvad || node.exit_node).sort(this._nodeSortingFunction);
 
               // Add regular nodes to main menu
               for (const node of regularNodes) {
                   const deviceIcon = this._getIconName(node);
-                  const subtitle = this._getNodeSubtitle(node);
-                  const onClick = node.exit_node_option ? () => {
+                  const subtitle = this._getNodeSubtitle(node, isSelfExitNode);
+                  const onClick = !isSelfExitNode && node.exit_node_option ? () => {
                       tailscale.exit_node = node.exit_node ? '' : node.id;
                   } : null;
                   const onLongClick = () => {
@@ -338,8 +359,7 @@ const TailscaleMenuToggle = GObject.registerClass(
                   this.menu.addMenuItem(mullvadButtonItem);
           };
 
-          tailscale.connect('notify::nodes', obj => updateNodes(obj));
-          updateNodes(tailscale);
+          this._notifyNodes = tailscale.connect('notify::nodes', obj => updateNodes(obj));
           mnodes.menu.addMenuItem(nodes);
           this.menu.addMenuItem(mnodes);
 
@@ -350,38 +370,45 @@ const TailscaleMenuToggle = GObject.registerClass(
           const prefs = new PopupMenu.PopupSubMenuMenuItem(_('Settings'), false, {});
 
           const routes = new PopupMenu.PopupSwitchMenuItem(_('Accept routes'), tailscale.accept_routes, {});
-          tailscale.connect('notify::accept-routes', obj => routes.setToggleState(obj.accept_routes));
-          routes.connect('toggled', item => {
+          this._notifyAcceptRoutes = [];
+          this._notifyAcceptRoutes.push(tailscale.connect('notify::accept-routes', obj => routes.setToggleState(obj.accept_routes)));
+          this._notifyAcceptRoutes.push(routes.connect('toggled', item => {
               tailscale.accept_routes = item.state;
-          });
+              return true;
+          }));
           prefs.menu.addMenuItem(routes);
 
           const dns = new PopupMenu.PopupSwitchMenuItem(_('Accept DNS'), tailscale.accept_dns, {});
-          tailscale.connect('notify::accept-dns', obj => dns.setToggleState(obj.accept_dns));
-          dns.connect('toggled', item => {
+          this._notifyAcceptDns = [];
+          this._notifyAcceptDns.push(tailscale.connect('notify::accept-dns', obj => dns.setToggleState(obj.accept_dns)));
+          this._notifyAcceptDns.push(dns.connect('toggled', item => {
               tailscale.accept_dns = item.state;
-          });
+              return true;
+          }));
           prefs.menu.addMenuItem(dns);
 
           const lan = new PopupMenu.PopupSwitchMenuItem(_('Allow LAN access'), tailscale.allow_lan_access, {});
-          tailscale.connect('notify::allow-lan-access', obj => lan.setToggleState(obj.allow_lan_access));
-          lan.connect('toggled', item => {
+          this._notifyAllowLanAcces = [];
+          this._notifyAllowLanAcces.push(tailscale.connect('notify::allow-lan-access', obj => lan.setToggleState(obj.allow_lan_access)));
+          this._notifyAllowLanAcces.push(lan.connect('toggled', item => {
               tailscale.allow_lan_access = item.state;
-          });
+          }));
           prefs.menu.addMenuItem(lan);
 
           const shields = new PopupMenu.PopupSwitchMenuItem(_('Shields up'), tailscale.shields_up, {});
-          tailscale.connect('notify::shields-up', obj => shields.setToggleState(obj.shields_up));
-          shields.connect('toggled', item => {
+          this._notifyShieldsUp = [];
+          this._notifyShieldsUp.push(tailscale.connect('notify::shields-up', obj => shields.setToggleState(obj.shields_up)));
+          this._notifyShieldsUp.push(shields.connect('toggled', item => {
               tailscale.shields_up = item.state;
-          });
+          }));
           prefs.menu.addMenuItem(shields);
 
           const ssh = new PopupMenu.PopupSwitchMenuItem(_('SSH'), tailscale.ssh, {});
-          tailscale.connect('notify::ssh', obj => ssh.setToggleState(obj.ssh));
-          ssh.connect('toggled', item => {
+          this._notifySSH = [];
+          this._notifySSH.push(tailscale.connect('notify::ssh', obj => ssh.setToggleState(obj.ssh)));
+          this._notifySSH.push(ssh.connect('toggled', item => {
               tailscale.ssh = item.state;
-          });
+          }));
           prefs.menu.addMenuItem(ssh);
 
           this.menu.addMenuItem(prefs);
@@ -399,10 +426,32 @@ const TailscaleMenuToggle = GObject.registerClass(
                   };
                   profiles.menu.addMenuItem(new TailscaleProfileItem(p.NetworkProfile.DisplayName ? p.NetworkProfile.DisplayName : p.Name, p.NetworkProfile.DomainName, enabled, onClick));
               }
+              return true;
           };
-          tailscale.connect('notify::profiles', obj => updateProfiles(obj));
-          updateProfiles(tailscale);
+          this._notifyProfiles = tailscale.connect('notify::profiles', obj => updateProfiles(obj));
           this.menu.addMenuItem(profiles);
+      }
+
+      destroy() {
+          this._notifyssh.foreach(id => GLib.Source.remove(id));
+          this._notifyssh = [];
+          this._notifyshieldsup.foreach(id => GLib.Source.remove(id));
+          this._notifyshieldsup = [];
+          this._notifyallowlanacces.foreach(id => GLib.Source.remove(id));
+          this._notifyallowlanacces = [];
+          this._notifyacceptdns.foreach(id => GLib.Source.remove(id));
+          this._notifyacceptdns = [];
+          this._notifyacceptroutes.foreach(id => GLib.Source.remove(id));
+          this._notifyacceptroutes = [];
+
+          // GLib.Source.remove(this._notifynodes);
+          // this._notifynodes = null;
+          GLib.Source.remove(this._notifyprofiles);
+          this._notifyprofiles = null;
+          GLib.Source.remove(this._notifyexitnodename);
+          this._notifyexitnodename = null;
+
+          super.destroy();
       }
   }
 );
