@@ -100,7 +100,12 @@ export const Tailscale = GObject.registerClass(
             'nodes': GObject.ParamSpec.jsobject(
                 'nodes', '', '',
                 GObject.ParamFlags.READABLE,
-                []
+                {}
+            ),
+            'selfNode': GObject.ParamSpec.jsobject(
+                'selfNode', '', '',
+                GObject.ParamFlags.READABLE,
+                {}
             ),
             'profiles': GObject.ParamSpec.jsobject(
                 'profiles', '', '',
@@ -121,7 +126,8 @@ export const Tailscale = GObject.registerClass(
             this._ssh = false;
             this._exitNode = '';
             this._exitNodeName = null;
-            this._nodes = [];
+            this._nodes = {};
+            this._selfNode = {};
             this._profiles = [];
             this._cancelable = new Gio.Cancellable();
             this._timeouts = [];
@@ -143,30 +149,56 @@ export const Tailscale = GObject.registerClass(
             }
         }
 
-        _processNodes(prefs, peers) {
-            const nodes = peers
-        .map(peer => {
-            const node = {
-                id: peer.ID,
-                name: peer.DNSName.split('.')[0],
-                os: peer.OS,
-                exit_node: peer.ID === prefs.ExitNodeID,
-                exit_node_option: peer.ExitNodeOption,
-                online: peer.Online,
-                ips: peer.TailscaleIPs,
-                mullvad: peer.Tags?.includes('tag:mullvad-exit-node') || false,
-                location: peer.Location,
-            };
-            return node;
-        })
-        .sort((a, b) =>
-            (b.exit_node - a.exit_node) ||
-          (b.online - a.online) ||
-          (b.exit_node_option - a.exit_node_option) ||
-          a.name.localeCompare(b.name)
-        );
+        _detectedAnyNodeDifference(left, right) {
+            return (left?.name !== right?.name) ||
+        (left?.os !== right?.os) ||
+        (left?.exit_node !== right?.exit_node) ||
+        (left?.exit_node_option !== right?.exit_node_option) ||
+        (left?.online !== right?.online) ||
+        (left?.ips.length !== right?.ips.length || left?.ips.some((v, i) => v !== right?.ips[i])) ||
+        (left?.mullvad !== right?.mullvad) ||
+        (left?.location !== right?.location);
+        }
 
-            if (JSON.stringify(nodes) !== JSON.stringify(this._nodes)) {
+        _processNodes(prefs, peers) {
+            let anyFoundNodeChanged = false;
+            const nodes = peers.map(peer => {
+                const node = {
+                    id: peer.ID,
+                    name: peer.DNSName.split('.')[0],
+                    os: peer.OS,
+                    exit_node: peer.ID === prefs.ExitNodeID,
+                    exit_node_option: peer.ExitNodeOption,
+                    online: peer.Online,
+                    ips: peer.TailscaleIPs,
+                    mullvad: peer.Tags?.includes('tag:mullvad-exit-node') || false,
+                    location: peer.Location,
+                };
+                if (!anyFoundNodeChanged) {
+                    const oldNode = this._nodes[node.id];
+                    anyFoundNodeChanged = !oldNode || this._detectedAnyNodeDifference(oldNode, node);
+                }
+                return node;
+            }).reduce((acc, nod) => {
+                acc[nod.id] = nod;
+                return acc;
+            }, {});
+
+            if (anyFoundNodeChanged) {
+                this._nodes = nodes;
+                this.notify('nodes');
+                return;
+            }
+
+            const oldSet = new Set(Object.keys(this._nodes));
+            const newSet = new Set(Object.keys(nodes));
+            if (oldSet.size !== newSet.size) {
+                this._nodes = nodes;
+                this.notify('nodes');
+                return;
+            }
+
+            if (oldSet.symmetricDifference(newSet).size !== 0) {
                 this._nodes = nodes;
                 this.notify('nodes');
             }
@@ -308,6 +340,10 @@ export const Tailscale = GObject.registerClass(
             return this._nodes;
         }
 
+        get selfNode() {
+            return this._selfNode;
+        }
+
         get profiles() {
             return this._profiles;
         }
@@ -333,6 +369,7 @@ export const Tailscale = GObject.registerClass(
                     // eslint-disable-next-line no-await-in-loop
                     const status = await this._client.request('GET', '/localapi/v0/status');
                     this._peers = Object.values(status.Peer || {});
+                    this._selfNode = status.Self || {};
                     // eslint-disable-next-line no-await-in-loop
                     this._prefs = await this._client.request('GET', '/localapi/v0/prefs');
                     // eslint-disable-next-line no-await-in-loop
