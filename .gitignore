@@ -1,3 +1,5 @@
 *.zip
 *.mo
 node_modules/
+.vscode/
+.devcontainer/
