@@ -1,7 +1,7 @@
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
-import Soup from 'gi://Soup?version=3.0';
+import Soup from 'gi://Soup';
 
 class TailscaleApiClient {
     constructor() {
