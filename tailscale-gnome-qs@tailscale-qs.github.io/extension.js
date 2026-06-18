@@ -278,6 +278,7 @@ const TailscaleMenuToggle = GObject.registerClass(
               menuEnabled: true,
           });
 
+          this._tailscale = tailscale;
           this.title = 'Tailscale';
           tailscale.bind_property('running', this, 'checked', GObject.BindingFlags.SYNC_CREATE | GObject.BindingFlags.BIDIRECTIONAL);
 
@@ -296,11 +297,11 @@ const TailscaleMenuToggle = GObject.registerClass(
           // This function is unique to this class. It adds a nice header with an
           // icon, title and optional subtitle. It's recommended you do so for
           // consistency with other menus.
-          this._notifyExitNodeName = tailscale.connect('notify::exit-node-name', () => {
+          tailscale.connectObject('notify::exit-node-name', () => {
               this.subtitle = tailscale.exit_node_name;
               this.menu.setHeader(icon, this.title, this.subtitle);
               disableExitNodeButton.reactive = tailscale.exit_node !== '';
-          });
+          }, this);
           this.menu.setHeader(icon, this.title, tailscale.exit_node_name);
 
           // NODES
@@ -359,7 +360,7 @@ const TailscaleMenuToggle = GObject.registerClass(
                   this.menu.addMenuItem(mullvadButtonItem);
           };
 
-          this._notifyNodes = tailscale.connect('notify::nodes', obj => updateNodes(obj));
+          tailscale.connectObject('notify::nodes', obj => updateNodes(obj), this);
           mnodes.menu.addMenuItem(nodes);
           this.menu.addMenuItem(mnodes);
 
@@ -369,60 +370,56 @@ const TailscaleMenuToggle = GObject.registerClass(
           // PREFS
           const prefs = new PopupMenu.PopupSubMenuMenuItem(_('Settings'), false, {});
 
-          const routes = new PopupMenu.PopupSwitchMenuItem(_('Accept routes'), tailscale.accept_routes, {});
-          routes.activate = function (_event) {
+          this._routes = new PopupMenu.PopupSwitchMenuItem(_('Accept routes'), tailscale.accept_routes, {});
+          this._routes.activate = function (_event) {
               this.toggle();
           };
-          this._notifyAcceptRoutes = [];
-          this._notifyAcceptRoutes.push(tailscale.connect('notify::accept-routes', obj => routes.setToggleState(obj.accept_routes)));
-          this._notifyAcceptRoutes.push(routes.connect('toggled', item => {
+          tailscale.connectObject('notify::accept-routes', obj => this._routes.setToggleState(obj.accept_routes), this);
+          this._routes.connectObject('toggled', item => {
               tailscale.accept_routes = item.state;
-          }));
-          prefs.menu.addMenuItem(routes);
+          }, this);
+          prefs.menu.addMenuItem(this._routes);
 
-          const dns = new PopupMenu.PopupSwitchMenuItem(_('Accept DNS'), tailscale.accept_dns, {});
-          dns.activate = function (_event) {
+          this._dns = new PopupMenu.PopupSwitchMenuItem(_('Accept DNS'), tailscale.accept_dns, {});
+          this._dns.activate = function (_event) {
               this.toggle();
           };
-          this._notifyAcceptDns = [];
-          this._notifyAcceptDns.push(tailscale.connect('notify::accept-dns', obj => dns.setToggleState(obj.accept_dns)));
-          this._notifyAcceptDns.push(dns.connect('toggled', item => {
+          tailscale.connectObject('notify::accept-dns', obj => this._dns.setToggleState(obj.accept_dns), this);
+          this._dns.connectObject('toggled', item => {
               tailscale.accept_dns = item.state;
-          }));
-          prefs.menu.addMenuItem(dns);
+          }, this);
+          prefs.menu.addMenuItem(this._dns);
 
-          const lan = new PopupMenu.PopupSwitchMenuItem(_('Allow LAN access'), tailscale.allow_lan_access, {});
-          lan.activate = function (_event) {
+          this._lan = new PopupMenu.PopupSwitchMenuItem(_('Allow LAN access'), tailscale.allow_lan_access, {});
+          this._lan.activate = function (_event) {
               this.toggle();
           };
-          this._notifyAllowLanAcces = [];
-          this._notifyAllowLanAcces.push(tailscale.connect('notify::allow-lan-access', obj => lan.setToggleState(obj.allow_lan_access)));
-          this._notifyAllowLanAcces.push(lan.connect('toggled', item => {
+          tailscale.connectObject('notify::allow-lan-access', obj => this._lan.setToggleState(obj.allow_lan_access), this);
+          this._lan.connectObject('toggled', item => {
               tailscale.allow_lan_access = item.state;
-          }));
-          prefs.menu.addMenuItem(lan);
+          }, this);
+          prefs.menu.addMenuItem(this._lan);
 
-          const shields = new PopupMenu.PopupSwitchMenuItem(_('Shields up'), tailscale.shields_up, {});
-          shields.activate = function (_event) {
+          this._shields = new PopupMenu.PopupSwitchMenuItem(_('Shields up'), tailscale.shields_up, {});
+          this._shields.activate = function (_event) {
               this.toggle();
           };
-          this._notifyShieldsUp = [];
-          this._notifyShieldsUp.push(tailscale.connect('notify::shields-up', obj => shields.setToggleState(obj.shields_up)));
-          this._notifyShieldsUp.push(shields.connect('toggled', item => {
+          tailscale.connectObject('notify::shields-up', obj => this._shields.setToggleState(obj.shields_up), this);
+          this._shields.connectObject('toggled', item => {
               tailscale.shields_up = item.state;
-          }));
-          prefs.menu.addMenuItem(shields);
+          }, this);
+          prefs.menu.addMenuItem(this._shields);
 
-          const ssh = new PopupMenu.PopupSwitchMenuItem(_('SSH'), tailscale.ssh, {});
-          ssh.activate = function (_event) {
+          this._ssh = new PopupMenu.PopupSwitchMenuItem(_('SSH'), tailscale.ssh, {});
+          this._ssh.activate = function (_event) {
               this.toggle();
           };
-          this._notifySSH = [];
-          this._notifySSH.push(tailscale.connect('notify::ssh', obj => ssh.setToggleState(obj.ssh)));
-          this._notifySSH.push(ssh.connect('toggled', item => {
+
+          tailscale.connectObject('notify::ssh', obj => this._ssh.setToggleState(obj.ssh), this);
+          this._ssh.connectObject('toggled', item => {
               tailscale.ssh = item.state;
-          }));
-          prefs.menu.addMenuItem(ssh);
+          }, this);
+          prefs.menu.addMenuItem(this._ssh);
 
           this.menu.addMenuItem(prefs);
 
@@ -441,29 +438,18 @@ const TailscaleMenuToggle = GObject.registerClass(
               }
               return true;
           };
-          this._notifyProfiles = tailscale.connect('notify::profiles', obj => updateProfiles(obj));
+          tailscale.connectObject('notify::profiles', obj => updateProfiles(obj), this);
           this.menu.addMenuItem(profiles);
       }
 
       destroy() {
-          this._notifyssh.foreach(id => GLib.Source.remove(id));
-          this._notifyssh = [];
-          this._notifyshieldsup.foreach(id => GLib.Source.remove(id));
-          this._notifyshieldsup = [];
-          this._notifyallowlanacces.foreach(id => GLib.Source.remove(id));
-          this._notifyallowlanacces = [];
-          this._notifyacceptdns.foreach(id => GLib.Source.remove(id));
-          this._notifyacceptdns = [];
-          this._notifyacceptroutes.foreach(id => GLib.Source.remove(id));
-          this._notifyacceptroutes = [];
-
-          // GLib.Source.remove(this._notifynodes);
-          // this._notifynodes = null;
-          GLib.Source.remove(this._notifyprofiles);
-          this._notifyprofiles = null;
-          GLib.Source.remove(this._notifyexitnodename);
-          this._notifyexitnodename = null;
-
+          this._tailscale.disconnectObject(this);
+          [this._routes, this._dns, this._lan, this._ssh, this._shields].forEach(item => item.disconnectObject(this));
+          this._routes = null;
+          this._dns = null;
+          this._lan = null;
+          this._ssh = null;
+          this._shields = null;
           super.destroy();
       }
   }
