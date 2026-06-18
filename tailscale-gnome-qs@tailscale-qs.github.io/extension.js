@@ -150,12 +150,12 @@ const TailscaleDeviceItem = GObject.registerClass(
               longPressGesture.enabled = true;
           } else {
               // GNOME 46 fallback - use traditional click handling
-              let pressTimeout = null;
+              this._pressTimeout = null;
 
               this._connectEvents.push(this.connect('button-press-event', (_actor, event) => {
                   if (event.get_button() === 1) {
-                      pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-                          pressTimeout = null;
+                      this._pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+                          this._pressTimeout = null;
                           onLongClick?.();
                           return GLib.SOURCE_REMOVE;
                       });
@@ -165,10 +165,10 @@ const TailscaleDeviceItem = GObject.registerClass(
 
               this._connectEvents.push(this.connect('button-release-event', (_actor, event) => {
                   if (event.get_button() === 1) {
-                      if (pressTimeout) {
+                      if (this._pressTimeout) {
                           // Released before long press fired - treat as normal click
-                          GLib.Source.remove(pressTimeout);
-                          pressTimeout = null;
+                          GLib.Source.remove(this._pressTimeout);
+                          this._pressTimeout = null;
                           onClick?.();
                       }
                       return Clutter.EVENT_STOP;
@@ -188,6 +188,14 @@ const TailscaleDeviceItem = GObject.registerClass(
       vfunc_button_release_event() { }
 
       vfunc_touch_event(_touchEvent) { }
+
+      destroy() {
+          if (this._pressTimeout !== null) {
+              GLib.Source.remove(this._pressTimeout);
+              this._pressTimeout = null;
+          }
+          super.destroy();
+      }
   }
 );
 
