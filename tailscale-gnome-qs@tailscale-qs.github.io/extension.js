@@ -63,6 +63,7 @@ const TailscaleIndicator = GObject.registerClass(
       _init(icon, tailscale) {
           super._init();
 
+          this._tailscale = tailscale;
           // Create the icon for the indicator
           const up = this._addIndicator();
           up.gicon = icon;
@@ -75,16 +76,13 @@ const TailscaleIndicator = GObject.registerClass(
               exit.visible = tailscale.running && tailscale.exit_node !== '';
               return true;
           };
-          this._exitNodeNotifier = tailscale.connect('notify::exit-node', () => setVisible());
-          this._RunningNotifier = tailscale.connect('notify::running', () => setVisible());
+          tailscale.connectObject('notify::exit-node', () => setVisible(), this);
+          tailscale.connectObject('notify::running', () => setVisible(), this);
           setVisible();
       }
 
       destroy() {
-          GLib.Source.remove(this._exitNodeNotifier);
-          this._exitNodeNotifier = null;
-          GLib.Source.remove(this._RunningNotifier);
-          this._RunningNotifier = null;
+          this._tailscale.disconnectObject(this);
           super.destroy();
       }
   }
