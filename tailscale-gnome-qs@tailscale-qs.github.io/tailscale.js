@@ -144,7 +144,7 @@ export const Tailscale = GObject.registerClass(
         destroy() {
             this._cancelable.cancel();
             this._cancelable = null;
-            this._client?.destroy?.();
+            this._client.destroy();
             this._client = null;
             this._timeouts.forEach(id => GLib.Source.remove(id));
             this._timeouts = [];
