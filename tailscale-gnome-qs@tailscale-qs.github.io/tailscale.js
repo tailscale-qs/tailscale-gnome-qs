@@ -52,6 +52,13 @@ class TailscaleApiClient {
         const contentType = message.response_headers.get_one('Content-Type');
         return contentType === 'application/json' ? JSON.parse(response) : response;
     }
+
+    destroy() {
+        this.session.abort();
+        this.session = null;
+        this.encoder = null;
+        this.decoder = null;
+    }
 }
 
 export const Tailscale = GObject.registerClass(
@@ -136,7 +143,9 @@ export const Tailscale = GObject.registerClass(
 
         destroy() {
             this._cancelable.cancel();
-            this._client.session.abort();
+            this._cancelable = null;
+            this._client?.destroy?.();
+            this._client = null;
             this._timeouts.forEach(id => GLib.Source.remove(id));
             this._timeouts = [];
         }
