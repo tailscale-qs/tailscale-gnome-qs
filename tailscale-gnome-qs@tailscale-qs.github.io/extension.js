@@ -154,6 +154,10 @@ const TailscaleDeviceItem = GObject.registerClass(
 
               this._connectEvents.push(this.connect('button-press-event', (_actor, event) => {
                   if (event.get_button() === 1) {
+                      if (this._pressTimeout !== null) {
+                          GLib.Source.remove(this._pressTimeout);
+                          this._pressTimeout = null;
+                      }
                       this._pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
                           this._pressTimeout = null;
                           onLongClick?.();
@@ -314,14 +318,14 @@ const TailscaleMenuToggle = GObject.registerClass(
 
           // NODES
           const mnodes = new PopupScrollableSubMenuMenuItem(_('Nodes'), false, {});
-          const nodes = new PopupMenu.PopupMenuSection();
+          this._nodes = new PopupMenu.PopupMenuSection();
 
           // Keep track of available Mullvad nodes
           let availableMullvadNodes = [];
           let mullvadButtonItem = null;
 
           const updateNodes = obj => {
-              nodes.removeAll();
+              this._nodes.removeAll();
               const isSelfExitNode = obj.selfNode.ExitNodeOption;
 
               // Separate Mullvad nodes from regular nodes and filter only online Mullvad nodes
@@ -345,7 +349,7 @@ const TailscaleMenuToggle = GObject.registerClass(
                       return true;
                   };
 
-                  nodes.addMenuItem(new TailscaleDeviceItem(deviceIcon, node.name, subtitle, onClick, onLongClick));
+                  this._nodes.addMenuItem(new TailscaleDeviceItem(deviceIcon, node.name, subtitle, onClick, onLongClick));
               }
 
               // Update Mullvad button visibility
@@ -369,7 +373,7 @@ const TailscaleMenuToggle = GObject.registerClass(
           };
 
           tailscale.connectObject('notify::nodes', obj => updateNodes(obj), this);
-          mnodes.menu.addMenuItem(nodes);
+          mnodes.menu.addMenuItem(this._nodes);
           this.menu.addMenuItem(mnodes);
 
           // SEPARATOR
@@ -453,6 +457,8 @@ const TailscaleMenuToggle = GObject.registerClass(
       destroy() {
           this._tailscale.disconnectObject(this);
           [this._routes, this._dns, this._lan, this._ssh, this._shields].forEach(item => item.disconnectObject(this));
+          this._nodes?.removeAll?.();
+          this._nodes = null;
           this._routes = null;
           this._dns = null;
           this._lan = null;
