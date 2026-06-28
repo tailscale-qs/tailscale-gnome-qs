@@ -20,7 +20,7 @@ class TailscaleApiClient {
     async* stream(method, path, cancellable) {
         const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
 
-        const baseStream = this.session.send(message, null);
+        const baseStream = this.session.send(message, cancellable);
         const stream = new Gio.DataInputStream({base_stream: baseStream});
         try {
             const contentType = message.response_headers.get_one('Content-Type');
@@ -138,16 +138,21 @@ export const Tailscale = GObject.registerClass(
             this._profiles = [];
             this._cancelable = new Gio.Cancellable();
             this._timeouts = [];
-            this._listen();
+            this._listening = false;
+            this._listen().catch(error => {
+                if (!(error instanceof GLib.Error &&
+                      error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)))
+                    console.error(error);
+            });
         }
 
         destroy() {
-            this._cancelable.cancel();
-            this._cancelable = null;
-            this._client.destroy();
-            this._client = null;
+            this._cancelable?.cancel();
             this._timeouts.forEach(id => GLib.Source.remove(id));
             this._timeouts = [];
+            this._client?.destroy();
+            this._client = null;
+            this._cancelable = null;
         }
 
         _processRunning(prefs) {
@@ -362,62 +367,91 @@ export const Tailscale = GObject.registerClass(
         }
 
         async _listen() {
+            // Guard against a second concurrent loop (e.g. on a quick
+            // disable/enable or suspend/resume cycle).
+            if (this._listening)
+                return;
+            this._listening = true;
+
+            // Capture a local reference so a concurrent destroy() (which nulls
+            // this._cancelable) can't turn the checks below into a null deref.
+            const cancellable = this._cancelable;
+
+            // Resolves after `delay` ms, but also resolves immediately if the
+            // cancellable is triggered, so destroy() doesn't have to wait 5s.
             const delayPromise = delay => new Promise(resolve => {
+                let cancelId = 0;
                 const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
                     const index = this._timeouts.indexOf(id);
                     if (index > -1)
                         this._timeouts.splice(index, 1);
+                    if (cancelId)
+                        cancellable.disconnect(cancelId);
                     resolve();
                     return GLib.SOURCE_REMOVE;
                 });
                 this._timeouts.push(id);
+                cancelId = cancellable.connect(() => {
+                    const index = this._timeouts.indexOf(id);
+                    if (index > -1) {
+                        this._timeouts.splice(index, 1);
+                        GLib.Source.remove(id);
+                    }
+                    resolve();
+                });
             });
 
-            while (true) {
-                try {
-                    // eslint-disable-next-line no-await-in-loop
-                    const status = await this._client.request('GET', '/localapi/v0/status');
-                    this._peers = Object.values(status.Peer || {});
-                    this._selfNode = status.Self || {};
-                    // eslint-disable-next-line no-await-in-loop
-                    this._prefs = await this._client.request('GET', '/localapi/v0/prefs');
-                    // eslint-disable-next-line no-await-in-loop
-                    this._profiles = await this._client.request('GET', '/localapi/v0/profiles/');
-                    this.notify('profiles');
-                    this._parseResponse();
+            try {
+                while (!cancellable.is_cancelled()) {
+                    try {
+                        // eslint-disable-next-line no-await-in-loop
+                        const status = await this._client.request('GET', '/localapi/v0/status');
+                        this._peers = Object.values(status.Peer || {});
+                        this._selfNode = status.Self || {};
+                        // eslint-disable-next-line no-await-in-loop
+                        this._prefs = await this._client.request('GET', '/localapi/v0/prefs');
+                        // eslint-disable-next-line no-await-in-loop
+                        this._profiles = await this._client.request('GET', '/localapi/v0/profiles/');
+                        this.notify('profiles');
+                        this._parseResponse();
 
-                    // eslint-disable-next-line no-await-in-loop
-                    for await (const update of this._client.stream('GET', '/localapi/v0/watch-ipn-bus', this._cancelable)) {
-                        let shouldUpdate = false;
-                        if (update.Prefs) {
-                            this._prefs = update.Prefs;
-                            shouldUpdate = true;
+                        // eslint-disable-next-line no-await-in-loop
+                        for await (const update of this._client.stream('GET', '/localapi/v0/watch-ipn-bus', cancellable)) {
+                            let shouldUpdate = false;
+                            if (update.Prefs) {
+                                this._prefs = update.Prefs;
+                                shouldUpdate = true;
+                            }
+                            if (update.NetMap) {
+                                this._peers = update.NetMap.Peers.map(peer => ({
+                                    ID: peer.StableID,
+                                    DNSName: peer.Name,
+                                    OS: peer.Hostinfo.OS,
+                                    ExitNodeOption: peer.AllowedIPs?.includes('0.0.0.0/0'),
+                                    Online: peer.Online,
+                                    TailscaleIPs: peer.Addresses.map(address => address.split('/')[0]),
+                                    Tags: peer.Tags,
+                                    Location: peer.Hostinfo.Location,
+                                }));
+                                shouldUpdate = true;
+                            }
+                            if (shouldUpdate)
+                                this._parseResponse();
                         }
-                        if (update.NetMap) {
-                            this._peers = update.NetMap.Peers.map(peer => ({
-                                ID: peer.StableID,
-                                DNSName: peer.Name,
-                                OS: peer.Hostinfo.OS,
-                                ExitNodeOption: peer.AllowedIPs?.includes('0.0.0.0/0'),
-                                Online: peer.Online,
-                                TailscaleIPs: peer.Addresses.map(address => address.split('/')[0]),
-                                Tags: peer.Tags,
-                                Location: peer.Hostinfo.Location,
-                            }));
-                            shouldUpdate = true;
-                        }
-                        if (shouldUpdate)
-                            this._parseResponse();
+                    } catch (error) {
+                        if (cancellable.is_cancelled())
+                            break;
+
+                        console.error(error);
+                        this._processRunning({WantRunning: false});
                     }
-                } catch (error) {
-                    if (this._cancelable.is_cancelled())
+                    if (cancellable.is_cancelled())
                         break;
-
-                    console.error(error);
-                    this._processRunning({WantRunning: false});
+                    // eslint-disable-next-line no-await-in-loop
+                    await delayPromise(5000);
                 }
-                // eslint-disable-next-line no-await-in-loop
-                await delayPromise(5000);
+            } finally {
+                this._listening = false;
             }
         }
 
