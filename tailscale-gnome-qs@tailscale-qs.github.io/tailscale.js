@@ -3,6 +3,10 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import Soup from 'gi://Soup';
 
+// Promisify methods once at module load to avoid wrapper accumulation in loops
+Gio._promisify(Gio.DataInputStream.prototype, 'read_line_async');
+Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
+
 class TailscaleApiClient {
     constructor() {
         const address = new Gio.UnixSocketAddress({
@@ -20,12 +24,11 @@ class TailscaleApiClient {
     async* stream(method, path, cancellable) {
         const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
 
-        const baseStream = this.session.send(message, null);
+        const baseStream = this.session.send(message, cancellable);
         const stream = new Gio.DataInputStream({base_stream: baseStream});
         try {
             const contentType = message.response_headers.get_one('Content-Type');
             while (true) {
-                Gio._promisify(Gio.DataInputStream.prototype, 'read_line_async');
                 // eslint-disable-next-line no-await-in-loop
                 const [_response, length] = await stream.read_line_async(GLib.PRIORITY_DEFAULT, cancellable);
                 if (length === 0)
@@ -35,7 +38,7 @@ class TailscaleApiClient {
                 yield contentType === 'application/json' ? JSON.parse(response) : response;
             }
         } finally {
-            stream.close(null);
+            stream.close(cancellable);
         }
     }
 
@@ -46,7 +49,6 @@ class TailscaleApiClient {
             message.set_request_body_from_bytes('application/json', new GLib.Bytes(bytes));
         }
 
-        Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
         const responseBytes = await this.session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null);
         const response = this.decoder.decode(responseBytes.get_data());
         const contentType = message.response_headers.get_one('Content-Type');
@@ -138,7 +140,10 @@ export const Tailscale = GObject.registerClass(
             this._profiles = [];
             this._cancelable = new Gio.Cancellable();
             this._timeouts = [];
-            this._listen();
+            this._listen().catch(error => {
+                if (!(error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)))
+                    console.error(error);
+            });
         }
 
         destroy() {
@@ -148,6 +153,11 @@ export const Tailscale = GObject.registerClass(
             this._client = null;
             this._timeouts.forEach(id => GLib.Source.remove(id));
             this._timeouts = [];
+            this._peers = null;
+            this._prefs = null;
+            this._profiles = null;
+            this._nodes = null;
+            this._selfNode = null;
         }
 
         _processRunning(prefs) {
@@ -410,11 +420,12 @@ export const Tailscale = GObject.registerClass(
                             this._parseResponse();
                     }
                 } catch (error) {
-                    if (this._cancelable.is_cancelled())
-                        break;
+                    if (!(error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))) {
+                        console.error(error);
+                        this._processRunning({WantRunning: false});
+                    }
 
-                    console.error(error);
-                    this._processRunning({WantRunning: false});
+                    break;
                 }
                 // eslint-disable-next-line no-await-in-loop
                 await delayPromise(5000);
