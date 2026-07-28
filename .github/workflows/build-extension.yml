@@ -12,10 +12,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: awalsh128/cache-apt-pkgs-action@latest
-      with:
-        packages: make gettext gnome-shell gnome-shell-extension-prefs gnome-shell-extensions
-        version: 1.0
+    - name: Install Packages
+      run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y make gettext gnome-shell
+    #- uses: awalsh128/cache-apt-pkgs-action@v1
+      #with:
+        #packages: make gettext gnome-shell gnome-shell-extension-prefs gnome-shell-extensions
+        #version: 1.0
 
     - name: Test extension builds from scratch
       run: |
