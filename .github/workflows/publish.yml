@@ -12,15 +12,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Packages
-        run: |
-          sudo apt-get update
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y make gettext gnome-shell
-      #- name: Cache Apt Packages
-        #uses: awalsh128/cache-apt-pkgs-action@v1
-        #with:
-          #packages: make gettext gnome-shell gnome-shell-extension-prefs gnome-shell-extensions
-          #version: 1.0
+      #- name: Install Packages
+        #run: |
+          #sudo apt-get update
+          #DEBIAN_FRONTEND=noninteractive sudo apt-get install -y make gettext gnome-shell
+      - name: Cache Apt Packages
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.1
+        with:
+          packages: make gettext gnome-shell
+          version: 1.0
       - name: Verify linted
         uses: reviewdog/action-eslint@2fee6dd72a5419ff4113f694e2068d2a03bb35dd # v1.33.2
         with:
