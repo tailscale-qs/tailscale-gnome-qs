@@ -20,6 +20,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           # If the PR is from a fork, you must also specify the repository
           repository: ${{ github.event.pull_request.head.repo.full_name }}
+          # Override for automated code review
+          allow-unsafe-pr-checkout: true
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
