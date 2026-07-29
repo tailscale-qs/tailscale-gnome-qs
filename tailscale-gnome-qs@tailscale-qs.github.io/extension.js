@@ -325,9 +325,8 @@ const TailscaleMenuToggle = GObject.registerClass(
           const updateNodes = obj => {
               this._nodes.removeAll();
               const isSelfExitNode = obj.selfNode.ExitNodeOption;
-
               // Separate Mullvad nodes from regular nodes and filter only online Mullvad nodes
-              availableMullvadNodes = filterMullvadNodes(obj.nodes);
+              availableMullvadNodes = filterMullvadNodes(Object.values(obj.nodes));
               const regularNodes = Object.values(obj.nodes).filter(node => !node.mullvad || node.exit_node).sort(this._nodeSortingFunction);
 
               // Add regular nodes to main menu
@@ -365,9 +364,9 @@ const TailscaleMenuToggle = GObject.registerClass(
               // Create new button using the helper function
               mullvadButtonItem = createMullvadExitNodeButton(availableMullvadNodes, tailscale);
 
-              // Add it to the main menu if it was created
+              // Add the mullvad button to the main menu if it was created
               if (mullvadButtonItem)
-                  this.menu.addMenuItem(mullvadButtonItem);
+                  this.menu.addMenuItem(mullvadButtonItem, 1);
           };
 
           tailscale.connectObject('notify::nodes', obj => updateNodes(obj), this);
