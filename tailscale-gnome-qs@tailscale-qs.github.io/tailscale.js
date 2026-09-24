@@ -192,6 +192,7 @@ export const Tailscale = GObject.registerClass(
                     ips: peer.TailscaleIPs,
                     mullvad: peer.Tags?.includes('tag:mullvad-exit-node') || false,
                     location: peer.Location,
+                    internal_id: peer.InternalID,
                 };
                 if (!anyFoundNodeChanged) {
                     const oldNode = this._nodes[node.id];
@@ -397,7 +398,7 @@ export const Tailscale = GObject.registerClass(
                     this._parseResponse();
 
                     // eslint-disable-next-line no-await-in-loop
-                    for await (const update of this._client.stream('GET', '/localapi/v0/watch-ipn-bus', this._cancelable)) {
+                    for await (const update of this._client.stream('GET', '/localapi/v0/watch-ipn-bus?mask=4096', this._cancelable)) { // mask = 2^12, aka 1<<12, aka [NotifyWatchOpt#NotifyPeerChanges](https://pkg.go.dev/tailscale.com/ipn#NotifyWatchOpt)
                         let shouldUpdate = false;
                         if (update.Prefs) {
                             this._prefs = update.Prefs;
@@ -411,11 +412,38 @@ export const Tailscale = GObject.registerClass(
                                 ExitNodeOption: peer.AllowedIPs?.includes('0.0.0.0/0'),
                                 Online: peer.Online,
                                 TailscaleIPs: peer.Addresses.map(address => address.split('/')[0]),
-                                Tags: peer.Tags,
+                                Tags: peer.Tags ?? [],
                                 Location: peer.Hostinfo.Location,
+                                InternalID: peer.ID,
                             }));
                             shouldUpdate = true;
                         }
+                        if (update.PeersChanged) {
+                            for (const changedPeer of update.PeersChanged) {
+                                const updatePeer = this._peers.find(oldPeer => oldPeer.ID === changedPeer.StableID) ?? {};
+                                const wasEmpty = Object.keys(updatePeer).length !== 0;
+
+                                updatePeer.ID = changedPeer.StableID;
+                                updatePeer.DNSName = changedPeer.Name;
+                                updatePeer.OS = changedPeer.Hostinfo.OS;
+                                updatePeer.ExitNodeOption = changedPeer.AllowedIPs?.includes('0.0.0.0/0');
+                                updatePeer.Online = changedPeer.Online;
+                                updatePeer.TailscaleIPs = changedPeer.Addresses.map(address => address.split('/')[0]);
+                                updatePeer.Tags = changedPeer.Tags ?? [];
+                                updatePeer.Location = changedPeer.Hostinfo.Location;
+                                updatePeer.InternalID = changedPeer.NodeID;
+                                if (wasEmpty)
+                                    this._peers.push(updatePeer);
+
+                                shouldUpdate ||= true;
+                            }
+                        }
+                        if (update.PeersRemoved) {
+                            const removeIds = update.PeersRemoved;
+                            this._peers = this._peers.filter(peer => !removeIds.includes(peer.NodeID));
+                            shouldUpdate ||= true;
+                        }
+
                         if (shouldUpdate)
                             this._parseResponse();
                     }
@@ -450,28 +478,25 @@ export const Tailscale = GObject.registerClass(
             const body = {
                 ...prefUpdatePartial,
                 ...Object.fromEntries(
-                    Object.entries(prefUpdatePartial)
-            .map(([key, _]) => [`${key}set`, true])
+                    Object.entries(prefUpdatePartial).map(([key, _]) => [`${key}set`, true])
                 ),
             };
-            this._client.request('PATCH', '/localapi/v0/prefs', body)
-        .then(
-            prefs => {
-                this._prefs = prefs;
-                this._parseResponse();
-            },
-            error => console.error(error)
-        );
+            this._client.request('PATCH', '/localapi/v0/prefs', body).then(
+                prefs => {
+                    this._prefs = prefs;
+                    this._parseResponse();
+                },
+                error => console.error(error)
+            );
         }
 
         _updateProfile(value) {
-            this._client.request('POST', `/localapi/v0/profiles/${value}`, {})
-        .then(
-            () => {
-                this.notify('profiles');
-            },
-            error => console.error(error)
-        );
+            this._client.request('POST', `/localapi/v0/profiles/${value}`, {}).then(
+                () => {
+                    this.notify('profiles');
+                },
+                error => console.error(error)
+            );
         }
     }
 );
