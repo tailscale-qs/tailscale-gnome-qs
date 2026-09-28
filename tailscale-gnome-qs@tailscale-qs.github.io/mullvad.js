@@ -84,7 +84,7 @@ export const MullvadNodeItem = GObject.registerClass({
     // Main content container
         const contentBox = new St.BoxLayout({
             style_class: 'mullvad-node-content',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.CENTER,
@@ -227,7 +227,7 @@ export const MullvadLocationItem = GObject.registerClass({
     // Main content container
         const contentBox = new St.BoxLayout({
             style_class: 'mullvad-location-content',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
         this.add_child(contentBox);
@@ -536,7 +536,7 @@ export const MullvadExitNodeDialog = GObject.registerClass(
       _createHeader() {
           const headerBox = new St.BoxLayout({
               style_class: 'mullvad-dialog-header',
-              vertical: false,
+              orientation: Clutter.Orientation.HORIZONTAL,
               x_expand: true,
               y_expand: false,
               height: 28,
@@ -580,7 +580,7 @@ export const MullvadExitNodeDialog = GObject.registerClass(
       _createSearchBox() {
           const searchBox = new St.BoxLayout({
               style_class: 'mullvad-search-box',
-              vertical: false,
+              orientation: Clutter.Orientation.HORIZONTAL,
               x_expand: true,
               margin_top: 12,
           });
@@ -636,7 +636,7 @@ export const MullvadExitNodeDialog = GObject.registerClass(
           // List container
           this._listBox = new St.BoxLayout({
               style_class: 'mullvad-locations-list boxed-list',
-              vertical: true,
+              orientation: Clutter.Orientation.VERTICAL,
               x_expand: true,
           });
 
@@ -767,7 +767,7 @@ export const MullvadExitNodeDialog = GObject.registerClass(
       _showNoResultsMessage() {
           const noResultsBox = new St.BoxLayout({
               style_class: 'mullvad-no-results',
-              vertical: true,
+              orientation: Clutter.Orientation.VERTICAL,
               x_align: Clutter.ActorAlign.CENTER,
               y_align: Clutter.ActorAlign.CENTER,
           });
