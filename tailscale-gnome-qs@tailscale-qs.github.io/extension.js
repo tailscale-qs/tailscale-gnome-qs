@@ -22,7 +22,6 @@ import GObject from 'gi://GObject';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 import GLib from 'gi://GLib';
-import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -116,68 +115,33 @@ const TailscaleDeviceItem = GObject.registerClass(
           this._connectEvents = [];
           this._connectEvents.push(this.connect('activate', () => onClick?.()));
 
-          const shellVersion = parseInt(Config.PACKAGE_VERSION.split('.')[0]);
-
-          if (shellVersion >= 47) {
-              const clickGesture = this._clickGesture ?? (() => {
-                  const action = new Clutter.ClickGesture();
-                  this.add_action(action);
-                  this._connectEvents.push(action.connect('notify::pressed', () => {
-                      if (action.pressed)
-                          this.add_style_pseudo_class('active');
-                      else
-                          this.remove_style_pseudo_class('active');
-                  }));
-                  this._connectEvents.push(action.connect('recognize', () => this.activate(Clutter.get_current_event())));
-                  return action;
-              })();
-              clickGesture.enabled = true;
-
-              const longPressGesture = this._longPressGesture ?? (() => {
-                  const action = new Clutter.LongPressGesture();
-                  this.add_action(action);
-                  this._connectEvents.push(action.connect('notify::pressed', () => {
-                      if (action.pressed)
-                          this.add_style_pseudo_class('active');
-                      else
-                          this.remove_style_pseudo_class('active');
-                  }));
-                  this._connectEvents.push(action.connect('recognize', () => onLongClick()));
-                  return action;
-              })();
-              longPressGesture.enabled = true;
-          } else {
-              // GNOME 46 fallback - use traditional click handling
-              this._pressTimeout = null;
-
-              this._connectEvents.push(this.connect('button-press-event', (_actor, event) => {
-                  if (event.get_button() === 1) {
-                      if (this._pressTimeout !== null) {
-                          GLib.Source.remove(this._pressTimeout);
-                          this._pressTimeout = null;
-                      }
-                      this._pressTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
-                          this._pressTimeout = null;
-                          onLongClick?.();
-                          return GLib.SOURCE_REMOVE;
-                      });
-                  }
-                  return Clutter.EVENT_PROPAGATE;
+          const clickGesture = this._clickGesture ?? (() => {
+              const action = new Clutter.ClickGesture();
+              this.add_action(action);
+              this._connectEvents.push(action.connect('notify::pressed', () => {
+                  if (action.pressed)
+                      this.add_style_pseudo_class('active');
+                  else
+                      this.remove_style_pseudo_class('active');
               }));
+              this._connectEvents.push(action.connect('recognize', () => this.activate(Clutter.get_current_event())));
+              return action;
+          })();
+          clickGesture.enabled = true;
 
-              this._connectEvents.push(this.connect('button-release-event', (_actor, event) => {
-                  if (event.get_button() === 1) {
-                      if (this._pressTimeout) {
-                          // Released before long press fired - treat as normal click
-                          GLib.Source.remove(this._pressTimeout);
-                          this._pressTimeout = null;
-                          onClick?.();
-                      }
-                      return Clutter.EVENT_STOP;
-                  }
-                  return Clutter.EVENT_PROPAGATE;
+          const longPressGesture = this._longPressGesture ?? (() => {
+              const action = new Clutter.LongPressGesture();
+              this.add_action(action);
+              this._connectEvents.push(action.connect('notify::pressed', () => {
+                  if (action.pressed)
+                      this.add_style_pseudo_class('active');
+                  else
+                      this.remove_style_pseudo_class('active');
               }));
-          }
+              this._connectEvents.push(action.connect('recognize', () => onLongClick()));
+              return action;
+          })();
+          longPressGesture.enabled = true;
       }
 
       activate(event) {
