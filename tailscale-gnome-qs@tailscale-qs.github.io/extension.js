@@ -156,7 +156,7 @@ const TailscaleDeviceItem = GObject.registerClass(
       vfunc_touch_event(_touchEvent) { }
 
       destroy() {
-          if (this._pressTimeout !== null) {
+          if (this._pressTimeout) {
               GLib.Source.remove(this._pressTimeout);
               this._pressTimeout = null;
           }
