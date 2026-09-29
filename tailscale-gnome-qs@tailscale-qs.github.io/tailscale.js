@@ -402,6 +402,7 @@ export const Tailscale = GObject.registerClass(
                         let shouldUpdate = false;
                         if (update.Prefs) {
                             this._prefs = update.Prefs;
+                            this.notify('profiles');
                             shouldUpdate = true;
                         }
                         if (update.NetMap) {
