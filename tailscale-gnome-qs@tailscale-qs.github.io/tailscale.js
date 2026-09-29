@@ -421,7 +421,7 @@ export const Tailscale = GObject.registerClass(
                         if (update.PeersChanged) {
                             for (const changedPeer of update.PeersChanged) {
                                 const updatePeer = this._peers.find(oldPeer => oldPeer.ID === changedPeer.StableID) ?? {};
-                                const wasEmpty = Object.keys(updatePeer).length !== 0;
+                                const wasEmpty = Object.keys(updatePeer).length === 0;
 
                                 updatePeer.ID = changedPeer.StableID;
                                 updatePeer.DNSName = changedPeer.Name;
@@ -431,7 +431,7 @@ export const Tailscale = GObject.registerClass(
                                 updatePeer.TailscaleIPs = changedPeer.Addresses.map(address => address.split('/')[0]);
                                 updatePeer.Tags = changedPeer.Tags ?? [];
                                 updatePeer.Location = changedPeer.Hostinfo.Location;
-                                updatePeer.InternalID = changedPeer.NodeID;
+                                updatePeer.InternalID = changedPeer.ID;
                                 if (wasEmpty)
                                     this._peers.push(updatePeer);
 
@@ -440,7 +440,7 @@ export const Tailscale = GObject.registerClass(
                         }
                         if (update.PeersRemoved) {
                             const removeIds = update.PeersRemoved;
-                            this._peers = this._peers.filter(peer => !removeIds.includes(peer.NodeID));
+                            this._peers = this._peers.filter(peer => !removeIds.includes(peer.NodeID ?? peer.InternalID));
                             shouldUpdate ||= true;
                         }
 
