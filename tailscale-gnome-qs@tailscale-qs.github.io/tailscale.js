@@ -189,7 +189,7 @@ export const Tailscale = GObject.registerClass(
                     exit_node: peer.ID === prefs.ExitNodeID,
                     exit_node_option: peer.ExitNodeOption,
                     online: peer.Online,
-                    ips: peer.TailscaleIPs,
+                    ips: peer.TailscaleIPs ?? [],
                     mullvad: peer.Tags?.includes('tag:mullvad-exit-node') || false,
                     location: peer.Location,
                     internal_id: peer.InternalID,
