@@ -418,6 +418,11 @@ export const Tailscale = GObject.registerClass(
                             }));
                             shouldUpdate = true;
                         }
+                        if (update.SelfChange) {
+                            // New netmap (e.g. profile switch): PeersChanged in this message is the full peer set
+                            this._peers = [];
+                            shouldUpdate = true;
+                        }
                         if (update.PeersChanged) {
                             for (const changedPeer of update.PeersChanged) {
                                 const updatePeer = this._peers.find(oldPeer => oldPeer.ID === changedPeer.StableID) ?? {};
