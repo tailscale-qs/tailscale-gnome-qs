@@ -6,6 +6,7 @@ import Soup from 'gi://Soup';
 // Promisify methods once at module load to avoid wrapper accumulation in loops
 Gio._promisify(Gio.DataInputStream.prototype, 'read_line_async');
 Gio._promisify(Soup.Session.prototype, 'send_and_read_async');
+Gio._promisify(Soup.Session.prototype, 'send_async');
 
 class TailscaleApiClient {
     constructor() {
@@ -24,7 +25,7 @@ class TailscaleApiClient {
     async* stream(method, path, cancellable) {
         const message = Soup.Message.new(method, `http://local-tailscaled.sock${path}`);
 
-        const baseStream = this.session.send(message, cancellable);
+        const baseStream = await this.session.send_async(message, GLib.PRIORITY_DEFAULT, cancellable);
         const stream = new Gio.DataInputStream({base_stream: baseStream});
         try {
             const contentType = message.response_headers.get_one('Content-Type');
