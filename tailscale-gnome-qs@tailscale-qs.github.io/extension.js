@@ -394,6 +394,29 @@ const TailscaleMenuToggle = GObject.registerClass(
           }, this);
           prefs.menu.addMenuItem(this._ssh);
 
+          prefs.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+          this._adminDashboard = new PopupMenu.PopupMenuItem(_('Admin Dashboard'));
+          this._adminDashboard.connectObject('activate', () => {
+              const controlUrl = tailscale._prefs?.ControlURL;
+              const adminUrl = !controlUrl || controlUrl === 'https://controlplane.tailscale.com'
+                  ? 'https://login.tailscale.com/admin/machines'
+                  : controlUrl;
+              Gio.AppInfo.launch_default_for_uri_async(
+                  adminUrl,
+                  global.create_app_launch_context(0, -1),
+                  null,
+                  (_source, res) => {
+                      try {
+                          Gio.AppInfo.launch_default_for_uri_finish(res);
+                      } catch (error) {
+                          console.error(error);
+                      }
+                  }
+              );
+          }, this);
+          prefs.menu.addMenuItem(this._adminDashboard);
+
           this.menu.addMenuItem(prefs);
 
           // PROFILES
@@ -417,7 +440,7 @@ const TailscaleMenuToggle = GObject.registerClass(
 
       destroy() {
           this._tailscale.disconnectObject(this);
-          [this._routes, this._dns, this._lan, this._ssh, this._shields].forEach(item => item.disconnectObject(this));
+          [this._routes, this._dns, this._lan, this._ssh, this._shields, this._adminDashboard].forEach(item => item.disconnectObject(this));
           this._nodes?.removeAll?.();
           this._nodes = null;
           this._routes = null;
@@ -425,6 +448,7 @@ const TailscaleMenuToggle = GObject.registerClass(
           this._lan = null;
           this._ssh = null;
           this._shields = null;
+          this._adminDashboard = null;
           super.destroy();
       }
   }
